@@ -48,12 +48,16 @@ function App() {
   const [score, setScore] = useState(0)
   const [best, setBest] = useState(0)
   const [status, setStatus] = useState('Press Start')
+  const [restartPulse, setRestartPulse] = useState(false)
+  const [scorePop, setScorePop] = useState(false)
+  const [faceEnabled, setFaceEnabled] = useState(true)
   const [cameraStatus, setCameraStatus] = useState('Initializing camera…')
   const [headDirection, setHeadDirection] = useState(null)
   const queuedDirection = useRef(direction)
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
   const smoothedNoseRef = useRef(null)
+  const faceEnabledRef = useRef(faceEnabled)
 
   const boardCells = useMemo(
     () => Array.from({ length: GRID_SIZE * GRID_SIZE }),
@@ -72,6 +76,14 @@ function App() {
     queuedDirection.current = { x: 1, y: 0 }
     setScore(0)
     setStatus('Ready')
+  }, [])
+
+  const clearOverlay = useCallback(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
   }, [])
 
   useEffect(() => {
@@ -113,9 +125,14 @@ function App() {
         videoRef.current.style.transform = 'scaleX(-1)'
         setCameraStatus('Head tracking active')
 
-        const loop = () => {
-          if (!active || !videoRef.current) return
-          if (videoRef.current.readyState >= 2 && landmarker) {
+    const loop = () => {
+      if (!active || !videoRef.current) return
+      if (!faceEnabledRef.current) {
+        clearOverlay()
+        animationId = requestAnimationFrame(loop)
+        return
+      }
+      if (videoRef.current.readyState >= 2 && landmarker) {
             const canvas = canvasRef.current
             if (canvas && videoRef.current.videoWidth && videoRef.current.videoHeight) {
               canvas.width = videoRef.current.videoWidth
@@ -183,14 +200,6 @@ function App() {
       return next
     }
 
-    const clearOverlay = () => {
-      const canvas = canvasRef.current
-      if (!canvas) return
-      const ctx = canvas.getContext('2d')
-      if (!ctx) return
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-    }
-
     const drawOverlay = (nose, direction, mirror) => {
       const canvas = canvasRef.current
       if (!canvas) return
@@ -203,7 +212,7 @@ function App() {
       ctx.beginPath()
       ctx.arc(cx, cy, 6, 0, Math.PI * 2)
       ctx.fill()
-      if (!direction) return
+        if (!direction) return
       const arrowLen = 120
       let ex = cx
       let ey = cy
@@ -239,6 +248,15 @@ function App() {
   }, [])
 
   useEffect(() => {
+    faceEnabledRef.current = faceEnabled
+    setCameraStatus(faceEnabled ? 'Head tracking active' : 'Face tracking off')
+    if (!faceEnabled) {
+      setHeadDirection(null)
+      clearOverlay()
+    }
+  }, [clearOverlay, faceEnabled])
+
+  useEffect(() => {
     if (!running) return undefined
     const interval = setInterval(() => {
       setSnake((prev) => {
@@ -267,6 +285,7 @@ function App() {
         if (nextHead.x === food.x && nextHead.y === food.y) {
           const nextScore = score + 10
           setScore(nextScore)
+          setScorePop(true)
           setFood(randomFood(nextSnake))
           return nextSnake
         }
@@ -284,6 +303,7 @@ function App() {
       }
       setRunning(true)
       setStatus('Running')
+      setRestartPulse(true)
     }
   }
 
@@ -292,17 +312,32 @@ function App() {
     setStatus('Paused')
   }
 
+  useEffect(() => {
+    if (!restartPulse) return undefined
+    const timer = setTimeout(() => setRestartPulse(false), 320)
+    return () => clearTimeout(timer)
+  }, [restartPulse])
+
+  useEffect(() => {
+    if (!scorePop) return undefined
+    const timer = setTimeout(() => setScorePop(false), 520)
+    return () => clearTimeout(timer)
+  }, [scorePop])
+
   return (
     <div className="app">
       <header className="hud">
         <div className="title">
-          <p className="eyebrow">Neon Snake</p>
+          <p className="eyebrow">SnakeCV</p>
           <h1>{status}</h1>
         </div>
         <div className="stats">
           <div>
             <p className="label">Score</p>
-            <p className="value">{score}</p>
+            <div className="score-value">
+              <p className="value">{score}</p>
+              <span className={`score-pop ${scorePop ? 'show' : ''}`}>+1</span>
+            </div>
           </div>
           <div>
             <p className="label">Best</p>
@@ -316,13 +351,31 @@ function App() {
           <button className="ghost" onClick={handlePause}>
             Pause
           </button>
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={faceEnabled}
+              onChange={(event) => setFaceEnabled(event.target.checked)}
+            />
+            <span className="toggle-track" />
+            <span className="toggle-knob" />
+            <span className="toggle-label">Face</span>
+          </label>
         </div>
       </header>
 
       <main className="arena">
         <div className="board playable">
           <div className="grid" />
-          <div className="board-cells">
+          <div
+            className={[
+              'board-cells',
+              status === 'Game Over' ? 'snake-out' : '',
+              restartPulse ? 'snake-in' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+          >
             {boardCells.map((_, idx) => {
               const x = idx % GRID_SIZE
               const y = Math.floor(idx / GRID_SIZE)

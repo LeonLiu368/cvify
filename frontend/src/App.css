@@ -82,15 +82,89 @@ body {
   margin: 0;
 }
 
+.score-value {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.score-pop {
+  position: absolute;
+  left: 4px;
+  top: 140%;
+  font-size: 1rem;
+  color: var(--accent-2);
+  opacity: 0;
+  transform: translateY(0) scale(0.9);
+  pointer-events: none;
+}
+
+.score-pop.show {
+  animation: score-pop 0.5s ease forwards;
+}
+
 .actions {
   display: flex;
   gap: 12px;
+  align-items: center;
 }
 
 button {
   border: none;
   font-family: inherit;
   cursor: pointer;
+}
+
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: #f6f0ff;
+  border: 1px solid rgba(108, 99, 255, 0.18);
+  color: var(--text);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  position: relative;
+}
+
+.toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.toggle-track {
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  background: rgba(108, 99, 255, 0.18);
+  position: relative;
+  transition: background 0.2s ease;
+}
+
+.toggle-knob {
+  position: absolute;
+  left: 12px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 6px 14px rgba(38, 26, 80, 0.2);
+  transform: translateY(0);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.toggle input:checked ~ .toggle-track {
+  background: rgba(255, 122, 89, 0.4);
+}
+
+.toggle input:checked ~ .toggle-knob {
+  transform: translateX(20px);
+  background: #ffe8e2;
 }
 
 .primary {
@@ -141,6 +215,7 @@ button {
     0 16px 40px var(--shadow);
   width: min(58vh, 460px);
   max-width: 100%;
+  transition: transform 0.35s ease;
 }
 
 .board::after {
@@ -232,6 +307,14 @@ button {
   padding: 12px;
 }
 
+.board-cells.snake-out {
+  animation: shrink-out 0.35s ease forwards;
+}
+
+.board-cells.snake-in {
+  animation: pop-in 0.32s ease;
+}
+
 .board-cells {
   position: relative;
   z-index: 1;
@@ -251,7 +334,8 @@ button {
 
 .cell.snake {
   background: linear-gradient(135deg, #4dd599, #39c0ff);
-  box-shadow: 0 6px 14px rgba(57, 192, 255, 0.3);
+  box-shadow: 0 6px 14px rgba(57, 192, 255, 0.3),
+    0 0 12px rgba(57, 192, 255, 0.35);
 }
 
 .cell.head {
@@ -279,6 +363,40 @@ button {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes shrink-out {
+  to {
+    transform: scale(0.85);
+    opacity: 0.6;
+  }
+}
+
+@keyframes pop-in {
+  0% {
+    transform: scale(0.9);
+  }
+  60% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes score-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.9);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(4px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
   }
 }
 
