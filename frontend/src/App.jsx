@@ -3,7 +3,7 @@ import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision'
 import './App.css'
 
 const GRID_SIZE = 18
-const START_SPEED = 160
+const START_SPEED = 140
 const DIRECTIONS = {
   ArrowUp: { x: 0, y: -1 },
   ArrowDown: { x: 0, y: 1 },
@@ -20,9 +20,10 @@ const HEAD_DIRECTIONS = {
   LEFT: { x: -1, y: 0 },
   RIGHT: { x: 1, y: 0 },
 }
-const NOSE_THRESHOLD = 0.08
+const NOSE_THRESHOLD = 0.06
 const NOSE_INDEX = 1
-const NOSE_SMOOTHING = 1.0
+const NOSE_SMOOTHING = 0.5
+const DIRECTION_COOLDOWN = 120
 
 const randomFood = (snake) => {
   const occupied = new Set(snake.map((seg) => `${seg.x},${seg.y}`))
@@ -53,11 +54,13 @@ function App() {
   const [faceEnabled, setFaceEnabled] = useState(true)
   const [cameraStatus, setCameraStatus] = useState('Initializing camera…')
   const [headDirection, setHeadDirection] = useState(null)
+  const [noseOffset, setNoseOffset] = useState({ x: 0, y: 0 })
   const queuedDirection = useRef(direction)
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
   const smoothedNoseRef = useRef(null)
   const faceEnabledRef = useRef(faceEnabled)
+  const lastDirectionRef = useRef(0)
 
   const boardCells = useMemo(
     () => Array.from({ length: GRID_SIZE * GRID_SIZE }),
@@ -149,17 +152,27 @@ function App() {
               const mirrored =
                 direction === 'LEFT' ? 'RIGHT' : direction === 'RIGHT' ? 'LEFT' : direction
               setHeadDirection(mirrored)
+              setNoseOffset({
+                x: Math.max(-16, Math.min(16, -(smoothNose.x - 0.5) * 70)),
+                y: Math.max(-16, Math.min(16, (smoothNose.y - 0.5) * 70)),
+              })
               drawOverlay(smoothNose, mirrored, true)
               setCameraStatus('Face detected')
               if (direction) {
                 const next = HEAD_DIRECTIONS[mirrored]
                 const current = queuedDirection.current
-                if (!(current.x + next.x === 0 && current.y + next.y === 0)) {
+                const now = performance.now()
+                if (
+                  now - lastDirectionRef.current > DIRECTION_COOLDOWN &&
+                  !(current.x + next.x === 0 && current.y + next.y === 0)
+                ) {
                   queuedDirection.current = next
+                  lastDirectionRef.current = now
                 }
               }
             } else {
               setHeadDirection(null)
+              setNoseOffset({ x: 0, y: 0 })
               clearOverlay()
               setCameraStatus('No face detected')
             }
@@ -312,6 +325,8 @@ function App() {
     setStatus('Paused')
   }
 
+  const noseVector = noseOffset
+
   useEffect(() => {
     if (!restartPulse) return undefined
     const timer = setTimeout(() => setRestartPulse(false), 320)
@@ -403,6 +418,12 @@ function App() {
             {headDirection ? (
               <p className="camera-direction">{headDirection}</p>
             ) : null}
+            <div className="nose-compass" aria-hidden="true">
+              <span className="nose-dot" style={{
+                transform: `translate(${noseVector.x}px, ${noseVector.y}px)`
+              }} />
+              <span className="nose-ring" />
+            </div>
           </div>
         </div>
       </main>
