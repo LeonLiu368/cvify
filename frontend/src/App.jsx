@@ -22,6 +22,8 @@ const HEAD_DIRECTIONS = {
 }
 const NOSE_THRESHOLD = 0.06
 const NOSE_INDEX = 1
+const LEFT_EYE_INDEX = 33
+const RIGHT_EYE_INDEX = 263
 const NOSE_SMOOTHING = 0.5
 const DIRECTION_COOLDOWN = 120
 
@@ -147,13 +149,20 @@ function App() {
               performance.now()
             )
             if (result.faceLandmarks && result.faceLandmarks.length) {
-              const nose = result.faceLandmarks[0][NOSE_INDEX]
+              const face = result.faceLandmarks[0]
+              const nose = face[NOSE_INDEX]
+              const leftEye = face[LEFT_EYE_INDEX]
+              const rightEye = face[RIGHT_EYE_INDEX]
+              const faceCenter = {
+                x: (nose.x + leftEye.x + rightEye.x) / 3,
+                y: (nose.y + leftEye.y + rightEye.y) / 3,
+              }
               if (!baselineNoseRef.current) {
-                baselineNoseRef.current = { x: nose.x, y: nose.y }
+                baselineNoseRef.current = { x: faceCenter.x, y: faceCenter.y }
               }
               const calibrated = {
-                x: nose.x - baselineNoseRef.current.x + 0.5,
-                y: nose.y - baselineNoseRef.current.y + 0.5,
+                x: faceCenter.x - baselineNoseRef.current.x + 0.5,
+                y: faceCenter.y - baselineNoseRef.current.y + 0.5,
               }
               const smoothNose = smoothPoint(calibrated)
               const direction = noseDirection(smoothNose)
