@@ -55,6 +55,7 @@ function App() {
   const [scorePop, setScorePop] = useState(false)
   const [faceEnabled, setFaceEnabled] = useState(true)
   const [cameraStatus, setCameraStatus] = useState('Initializing camera…')
+  const [fps, setFps] = useState(0)
   const [headDirection, setHeadDirection] = useState(null)
   const [noseOffset, setNoseOffset] = useState({ x: 0, y: 0 })
   const queuedDirection = useRef(direction)
@@ -64,6 +65,8 @@ function App() {
   const faceEnabledRef = useRef(faceEnabled)
   const lastDirectionRef = useRef(0)
   const baselineNoseRef = useRef(null)
+  const fpsLastRef = useRef(performance.now())
+  const fpsCountRef = useRef(0)
 
   const boardCells = useMemo(
     () => Array.from({ length: GRID_SIZE * GRID_SIZE }),
@@ -138,7 +141,7 @@ function App() {
         animationId = requestAnimationFrame(loop)
         return
       }
-      if (videoRef.current.readyState >= 2 && landmarker) {
+          if (videoRef.current.readyState >= 2 && landmarker) {
             const canvas = canvasRef.current
             if (canvas && videoRef.current.videoWidth && videoRef.current.videoHeight) {
               canvas.width = videoRef.current.videoWidth
@@ -151,18 +154,12 @@ function App() {
             if (result.faceLandmarks && result.faceLandmarks.length) {
               const face = result.faceLandmarks[0]
               const nose = face[NOSE_INDEX]
-              const leftEye = face[LEFT_EYE_INDEX]
-              const rightEye = face[RIGHT_EYE_INDEX]
-              const faceCenter = {
-                x: (nose.x + leftEye.x + rightEye.x) / 3,
-                y: (nose.y + leftEye.y + rightEye.y) / 3,
-              }
               if (!baselineNoseRef.current) {
-                baselineNoseRef.current = { x: faceCenter.x, y: faceCenter.y }
+                baselineNoseRef.current = { x: nose.x, y: nose.y }
               }
               const calibrated = {
-                x: faceCenter.x - baselineNoseRef.current.x + 0.5,
-                y: faceCenter.y - baselineNoseRef.current.y + 0.5,
+                x: nose.x - baselineNoseRef.current.x + 0.5,
+                y: nose.y - baselineNoseRef.current.y + 0.5,
               }
               const smoothNose = smoothPoint(calibrated)
               const direction = noseDirection(smoothNose)
@@ -194,6 +191,16 @@ function App() {
               clearOverlay()
               setCameraStatus('No face detected')
             }
+          }
+          fpsCountRef.current += 1
+          const now = performance.now()
+          if (now - fpsLastRef.current >= 500) {
+            const computed = Math.round(
+              (fpsCountRef.current * 1000) / (now - fpsLastRef.current)
+            )
+            setFps(computed)
+            fpsCountRef.current = 0
+            fpsLastRef.current = now
           }
           animationId = requestAnimationFrame(loop)
         }
@@ -345,6 +352,12 @@ function App() {
     setStatus('Paused')
   }
 
+  const handleRecalibrate = () => {
+    baselineNoseRef.current = null
+    setNoseOffset({ x: 0, y: 0 })
+    setHeadDirection(null)
+  }
+
   const noseVector = noseOffset
 
   useEffect(() => {
@@ -385,6 +398,9 @@ function App() {
           </button>
           <button className="ghost" onClick={handlePause}>
             Pause
+          </button>
+          <button className="ghost" onClick={handleRecalibrate}>
+            Recalibrate
           </button>
           <label className="toggle">
             <input
@@ -430,7 +446,7 @@ function App() {
           </div>
         </div>
 
-        <div className="camera-panel">
+          <div className="camera-panel">
           <div className="camera-frame">
             <video ref={videoRef} muted playsInline />
             <canvas ref={canvasRef} />
@@ -438,6 +454,7 @@ function App() {
             {headDirection ? (
               <p className="camera-direction">{headDirection}</p>
             ) : null}
+            <p className="fps-badge">{fps} fps</p>
             <div className="nose-compass" aria-hidden="true">
               <span className="nose-dot" style={{
                 transform: `translate(${noseVector.x}px, ${noseVector.y}px)`

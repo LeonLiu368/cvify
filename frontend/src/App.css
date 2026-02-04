@@ -310,6 +310,19 @@ button {
   text-transform: uppercase;
 }
 
+.fps-badge{
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(31, 42, 68, 0.7);
+  color: #ffffff;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+}
+
 .nose-compass{
   position: absolute;
   right: 12px;
