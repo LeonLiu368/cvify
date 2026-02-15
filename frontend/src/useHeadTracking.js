@@ -10,6 +10,7 @@ import {
   HEAD_DIRECTIONS,
   CALIBRATION_SAMPLES_TARGET,
   getMirroredHeadDirection,
+  getNoseAngleRadians,
   noseOffsetFromNormalized,
   medianPoint,
 } from './headTrackingConfig'
@@ -30,12 +31,13 @@ const BASELINE_BLEND_ALPHA = 0.1
 const BASELINE_DRIFT_ENABLED = false
 
 /**
- * @param {{ faceEnabled: boolean, onDirectionChange: (vec: { x: number, y: number }) => void, sensitivity?: number }} options
+ * @param {{ faceEnabled: boolean, onDirectionChange?: (vec: { x: number, y: number }) => void, onAngleChange?: (angleRadians: number) => void, sensitivity?: number }} options
  * @returns {{ videoRef: React.RefObject, canvasRef: React.RefObject, cameraStatus: string, headDirection: string | null, noseOffset: { x: number, y: number }, fps: number, trackingStatus: 'idle'|'loading'|'ready'|'error', isCalibrating: boolean, calibrationProgress: number, calibrationMessage: string, recalibrate: () => void, retry: () => void }}
  */
 export function useHeadTracking({
   faceEnabled,
   onDirectionChange,
+  onAngleChange,
   sensitivity = 1,
 }) {
   const [trackingStatus, setTrackingStatus] = useState('loading')
@@ -60,12 +62,16 @@ export function useHeadTracking({
   const fpsCountRef = useRef(0)
   const lastUIThrottleRef = useRef(0)
   const onDirectionChangeRef = useRef(onDirectionChange)
+  const onAngleChangeRef = useRef(onAngleChange)
   const isCalibratingRef = useRef(false)
   const calibrationSamplesRef = useRef([])
 
   useEffect(() => {
     onDirectionChangeRef.current = onDirectionChange
   }, [onDirectionChange])
+  useEffect(() => {
+    onAngleChangeRef.current = onAngleChange
+  }, [onAngleChange])
   useEffect(() => {
     faceEnabledRef.current = faceEnabled
   }, [faceEnabled])
@@ -225,7 +231,14 @@ export function useHeadTracking({
               }
               const smoothNose = smoothPoint(calibrated)
               const threshold = NOSE_THRESHOLD / Math.max(0.25, sensitivity)
-              const mirrored = getMirroredHeadDirection(smoothNose, threshold)
+              const useAngleMode = typeof onAngleChangeRef.current === 'function'
+              const mirrored = useAngleMode
+                ? null
+                : getMirroredHeadDirection(smoothNose, threshold)
+              const noseAngle =
+                useAngleMode
+                  ? getNoseAngleRadians(smoothNose, true, threshold)
+                  : null
               if (now - lastUIThrottleRef.current >= UI_THROTTLE_MS) {
                 lastUIThrottleRef.current = now
                 setHeadDirection(mirrored)
@@ -238,16 +251,22 @@ export function useHeadTracking({
                   drawTrackingOverlay(ctx, canvas.width, canvas.height, {
                     nose: smoothNose,
                     direction: mirrored,
+                    angle: noseAngle,
                     faceLandmarks: face,
                     mirror: true,
                   })
                 }
               }
-              if (mirrored) {
+              if (useAngleMode && noseAngle != null) {
+                if (now - lastDirectionRef.current > DIRECTION_COOLDOWN_MS) {
+                  lastDirectionRef.current = now
+                  onAngleChangeRef.current(noseAngle)
+                }
+              } else if (mirrored) {
                 const next = HEAD_DIRECTIONS[mirrored]
                 if (now - lastDirectionRef.current > DIRECTION_COOLDOWN_MS) {
                   lastDirectionRef.current = now
-                  onDirectionChangeRef.current(next)
+                  onDirectionChangeRef.current?.(next)
                 }
               }
             } else {

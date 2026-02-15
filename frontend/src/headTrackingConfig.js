@@ -87,6 +87,30 @@ export function medianPoint(points) {
 }
 
 /**
+ * Omnidirectional angle in radians from normalized nose (for Slither-style steering).
+ * Center = 0.5; mirror corrects for mirrored camera so "head turn right" in world gives consistent angle.
+ * @param {{ x: number, y: number }} normalizedNose - nose position, center = 0.5
+ * @param {boolean} mirror - true when camera is mirrored
+ * @param {number} [threshold=NOSE_THRESHOLD] - below this distance from center, return null (optional dead zone)
+ * @returns {number | null} angle in [-Math.PI, Math.PI], or null if within dead zone
+ */
+export function getNoseAngleRadians(
+  normalizedNose,
+  mirror,
+  threshold = NOSE_THRESHOLD,
+) {
+  const dx = normalizedNose.x - NOSE_CENTER
+  const dy = normalizedNose.y - NOSE_CENTER
+  const dist = Math.hypot(dx, dy)
+  if (dist < threshold) return null
+  const angle = Math.atan2(dy, mirror ? -dx : dx)
+  let out = angle
+  while (out > Math.PI) out -= 2 * Math.PI
+  while (out < -Math.PI) out += 2 * Math.PI
+  return out
+}
+
+/**
  * Compute nose offset for compass UI from normalized nose (clamped).
  */
 export function noseOffsetFromNormalized(normalizedNose) {

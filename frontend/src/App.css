@@ -48,6 +48,223 @@ body {
   background: var(--bg-alt);
 }
 
+/* Landing page */
+.landing {
+  min-height: 100vh;
+  padding: 48px 5vw 32px;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.landing-brand {
+  font-family: 'Space Grotesk', 'DM Sans', sans-serif;
+  font-weight: 700;
+  font-size: clamp(2rem, 6vw, 3rem);
+  letter-spacing: -0.03em;
+  margin: 0 0 var(--space-sm);
+  color: var(--text);
+}
+
+.landing-tagline {
+  font-size: 1.1rem;
+  color: var(--muted);
+  margin: 0 0 var(--space-lg);
+  line-height: 1.5;
+}
+
+.game-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.game-card {
+  background: var(--card);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+}
+
+.game-card-title {
+  font-family: 'Space Grotesk', 'DM Sans', sans-serif;
+  font-weight: 600;
+  font-size: 1.25rem;
+  margin: 0 0 var(--space-sm);
+  color: var(--text);
+}
+
+.game-card-desc {
+  font-size: 0.95rem;
+  color: var(--muted);
+  margin: 0 0 var(--space-md);
+  line-height: 1.5;
+}
+
+.game-card-cta {
+  display: inline-block;
+  text-decoration: none;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  font-family: 'Space Grotesk', 'DM Sans', sans-serif;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border: none;
+  transition: opacity 0.15s ease;
+}
+
+.game-card-cta:hover {
+  opacity: 0.9;
+}
+
+/* Game page nav */
+.game-nav {
+  margin-bottom: var(--space-md);
+}
+
+.game-nav-back {
+  font-size: 0.9rem;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.game-nav-back:hover {
+  color: var(--text);
+}
+
+/* Slither page */
+.slither-page {
+  display: grid;
+  grid-template-columns: 1fr minmax(200px, 320px) auto;
+  grid-template-rows: auto auto 1fr auto;
+  grid-template-areas:
+    "nav nav nav"
+    "header header leaderboard"
+    "arena camera leaderboard"
+    "hint hint hint";
+  gap: var(--space-md);
+  min-height: 100vh;
+}
+
+.slither-camera-panel {
+  grid-area: camera;
+  min-height: 200px;
+}
+
+.slither-camera-panel .camera-frame {
+  width: 100%;
+  height: 100%;
+  min-height: 200px;
+}
+
+.slither-page .game-nav {
+  grid-area: nav;
+}
+
+.slither-header {
+  grid-area: header;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.slither-title {
+  font-family: 'Space Grotesk', 'DM Sans', sans-serif;
+  font-weight: 700;
+  font-size: 1.25rem;
+  margin: 0;
+}
+
+.slither-actions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.slither-arena {
+  grid-area: arena;
+  min-height: 400px;
+  background: var(--board-bg);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.slither-canvas-wrap {
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+}
+
+.slither-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.slither-leaderboard {
+  grid-area: leaderboard;
+  background: var(--card);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  min-width: 140px;
+  align-self: start;
+}
+
+.slither-leaderboard-title {
+  font-family: 'Space Grotesk', 'DM Sans', sans-serif;
+  font-weight: 600;
+  font-size: 0.85rem;
+  margin: 0 0 var(--space-sm);
+  color: var(--muted);
+}
+
+.slither-leaderboard-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.slither-leaderboard-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) 0;
+  font-size: 0.9rem;
+}
+
+.slither-leaderboard-rank {
+  color: var(--muted);
+  min-width: 1.5em;
+}
+
+.slither-leaderboard-color {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.slither-leaderboard-length {
+  font-weight: 600;
+}
+
+.slither-leaderboard-you {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.slither-controls-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
 .hud {
   display: flex;
   flex-wrap: wrap;

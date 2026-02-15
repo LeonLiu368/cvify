@@ -58,14 +58,14 @@ export function getNoseScreenPosition(noseRaw, width, height, mirror) {
 
 /**
  * Draw the full tracking overlay (clears canvas first).
+ * Supports direction (4-way) or angle (omnidirectional). When angle is provided it takes precedence.
  * @param {CanvasRenderingContext2D} ctx
  * @param {number} width - canvas width
  * @param {number} height - canvas height
- * @param {{ nose: { x: number, y: number }, direction: string | null, faceLandmarks: Array<{x,y,z}> | null, mirror: boolean }} options
- *   nose = calibrated normalized (0–1, center 0.5) for arrow direction/scale; dot uses raw landmark.
+ * @param {{ nose: { x: number, y: number }, direction?: string | null, angle?: number | null, faceLandmarks: Array<{x,y,z}> | null, mirror: boolean }} options
  */
 export function drawTrackingOverlay(ctx, width, height, options) {
-  const { nose, direction, faceLandmarks, mirror } = options
+  const { nose, direction, angle: optionsAngle, faceLandmarks, mirror } = options
   ctx.clearRect(0, 0, width, height)
 
   if (faceLandmarks && faceLandmarks.length) {
@@ -86,18 +86,14 @@ export function drawTrackingOverlay(ctx, width, height, options) {
   ctx.fill()
   ctx.stroke()
 
-  if (direction) {
-    const distance = Math.hypot(nose.x - NOSE_CENTER, nose.y - NOSE_CENTER)
-    const arrowLength = getArrowLength(distance)
+  const distance = Math.hypot(nose.x - NOSE_CENTER, nose.y - NOSE_CENTER)
+  const arrowLength = getArrowLength(distance)
 
-    let ex = cx
-    let ey = cy
-    if (direction === 'RIGHT') ex += arrowLength
-    if (direction === 'LEFT') ex -= arrowLength
-    if (direction === 'UP') ey -= arrowLength
-    if (direction === 'DOWN') ey += arrowLength
-
-    const angle =
+  let drawAngle = null
+  if (optionsAngle != null) {
+    drawAngle = optionsAngle
+  } else if (direction) {
+    drawAngle =
       direction === 'RIGHT'
         ? 0
         : direction === 'LEFT'
@@ -105,7 +101,11 @@ export function drawTrackingOverlay(ctx, width, height, options) {
           : direction === 'UP'
             ? -Math.PI / 2
             : Math.PI / 2
+  }
 
+  if (drawAngle != null) {
+    const ex = cx + arrowLength * Math.cos(drawAngle)
+    const ey = cy + arrowLength * Math.sin(drawAngle)
     ctx.strokeStyle = ARROW_STROKE
     ctx.fillStyle = ARROW_FILL
     ctx.lineWidth = 3.5
@@ -116,12 +116,12 @@ export function drawTrackingOverlay(ctx, width, height, options) {
     ctx.lineTo(ex, ey)
     ctx.stroke()
 
-    const hx = ex - ARROW_HEAD_LEN * Math.cos(angle)
-    const hy = ey - ARROW_HEAD_LEN * Math.sin(angle)
-    const lx = hx + ARROW_HEAD_LEN * 0.45 * Math.cos(angle + Math.PI / 2)
-    const ly = hy + ARROW_HEAD_LEN * 0.45 * Math.sin(angle + Math.PI / 2)
-    const rx = hx + ARROW_HEAD_LEN * 0.45 * Math.cos(angle - Math.PI / 2)
-    const ry = hy + ARROW_HEAD_LEN * 0.45 * Math.sin(angle - Math.PI / 2)
+    const hx = ex - ARROW_HEAD_LEN * Math.cos(drawAngle)
+    const hy = ey - ARROW_HEAD_LEN * Math.sin(drawAngle)
+    const lx = hx + ARROW_HEAD_LEN * 0.45 * Math.cos(drawAngle + Math.PI / 2)
+    const ly = hy + ARROW_HEAD_LEN * 0.45 * Math.sin(drawAngle + Math.PI / 2)
+    const rx = hx + ARROW_HEAD_LEN * 0.45 * Math.cos(drawAngle - Math.PI / 2)
+    const ry = hy + ARROW_HEAD_LEN * 0.45 * Math.sin(drawAngle - Math.PI / 2)
     ctx.beginPath()
     ctx.moveTo(ex, ey)
     ctx.lineTo(lx, ly)
