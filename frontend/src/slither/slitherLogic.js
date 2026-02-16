@@ -7,7 +7,9 @@ export const SEGMENT_SPACING = 8
 export const HEAD_RADIUS = 10
 export const BODY_RADIUS = 8
 export const PELLET_RADIUS = 6
-export const DEFAULT_SPEED = 120
+/** Extra radius for pellet collection (magnet effect). */
+export const MAGNET_RADIUS = 12
+export const DEFAULT_SPEED = 160
 export const TURN_SPEED = 4
 export const PELLET_VALUE = 1
 export const DEATH_PELLET_FRACTION = 0.4
@@ -209,9 +211,10 @@ function headHitsBody(snakeId, head, allSnakes) {
  * @param {GameState} state
  * @param {number} dt
  * @param {Record<string, number>} targetAngles snakeId -> target angle in radians
+ * @param {{ playerSpeedMultiplier?: number }} [options]
  * @returns {{ state: GameState, deadIds: string[] }}
  */
-export function tick(state, dt, targetAngles = {}) {
+export function tick(state, dt, targetAngles = {}, options = {}) {
   const { bounds } = state
   let { snakes, pellets } = state
   const padding = ARENA_PADDING
@@ -219,18 +222,23 @@ export function tick(state, dt, targetAngles = {}) {
   const maxX = bounds.width - padding
   const minY = padding
   const maxY = bounds.height - padding
+  const playerSpeedMultiplier = options.playerSpeedMultiplier ?? 1
 
   snakes = snakes.map((s) => {
     const target = targetAngles[s.id] ?? s.angle
-    return moveSnake(s, dt, target)
+    const speedMul = s.isPlayer ? playerSpeedMultiplier : 1
+    const snakeToMove = speedMul !== 1 ? { ...s, speed: s.speed * speedMul } : s
+    const result = moveSnake(snakeToMove, dt, target)
+    if (speedMul !== 1) return { ...result, speed: s.speed }
+    return result
   })
 
-  const pelletRadiusSq = (PELLET_RADIUS + HEAD_RADIUS) ** 2
+  const pelletCollectRadiusSq = (HEAD_RADIUS + PELLET_RADIUS + MAGNET_RADIUS) ** 2
   snakes = snakes.map((snake) => {
     const head = snake.segments[0]
     let lengthGain = 0
     for (let i = pellets.length - 1; i >= 0; i--) {
-      if (distSq(head, pellets[i]) < pelletRadiusSq) {
+      if (distSq(head, pellets[i]) < pelletCollectRadiusSq) {
         lengthGain += pellets[i].value
         pellets = pellets.slice(0, i).concat(pellets.slice(i + 1))
       }

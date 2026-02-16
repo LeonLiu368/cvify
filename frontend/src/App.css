@@ -135,58 +135,113 @@ body {
   color: var(--text);
 }
 
-/* Slither page */
+/* Slither page – canvas-centric layout, HUD overlays */
 .slither-page {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  grid-template-rows: auto auto 1fr auto;
-  grid-template-areas:
-    "nav nav"
-    "header leaderboard"
-    "arena leaderboard"
-    "hint hint";
+  --slither-arena-bg: #0d0d0d;
+  --slither-hud-bg: rgba(0, 0, 0, 0.6);
+  --slither-overlay-text: #e8e8e8;
+  display: flex;
+  flex-direction: column;
   gap: var(--space-md);
   min-height: 100vh;
 }
 
 .slither-page .game-nav {
-  grid-area: nav;
+  flex-shrink: 0;
+}
+
+.slither-arena {
+  flex: 1;
+  min-height: 75vh;
+  background: var(--slither-arena-bg, var(--board-bg));
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.slither-arena-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+}
+
+.slither-arena .slither-canvas-wrap {
+  position: absolute;
+  inset: 0;
 }
 
 .slither-header {
-  grid-area: header;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--slither-hud-bg, rgba(0, 0, 0, 0.3));
   border-bottom: none;
 }
 
 .slither-title {
   font-family: 'Space Grotesk', 'DM Sans', sans-serif;
   font-weight: 700;
-  font-size: 1.25rem;
+  font-size: 1rem;
+  letter-spacing: 0.02em;
   margin: 0;
+  color: var(--slither-overlay-text, var(--text));
 }
 
 .slither-actions {
   display: flex;
+  align-items: center;
   gap: var(--space-sm);
 }
 
-.slither-arena {
-  grid-area: arena;
-  min-height: 400px;
-  background: var(--board-bg);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+.slither-header .primary,
+.slither-header .ghost {
+  padding: var(--space-xs) var(--space-sm);
+  font-size: 0.85rem;
 }
 
-.slither-arena-wrap {
-  position: relative;
+.slither-header .toggle-label,
+.slither-header .sensitivity-text {
+  font-size: 0.8rem;
+}
+
+.slither-calibration-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  border-radius: var(--radius-md);
+}
+
+.slither-calibration-content {
+  text-align: center;
+  padding: var(--space-md) var(--space-lg);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.slither-calibration-text {
+  font-family: 'Space Grotesk', 'DM Sans', sans-serif;
+  font-weight: 600;
+  font-size: clamp(1.1rem, 2.5vw, 1.4rem);
+  margin: 0 0 var(--space-xs);
+}
+
+.slither-calibration-countdown {
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin: 0;
 }
 
 .slither-game-over-overlay {
@@ -203,21 +258,22 @@ body {
 
 .slither-game-over-content {
   text-align: center;
-  padding: var(--space-lg) 32px;
+  padding: var(--space-md) var(--space-lg);
   border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .slither-game-over-title {
   font-family: 'Space Grotesk', 'DM Sans', sans-serif;
   font-weight: 700;
-  font-size: clamp(1.5rem, 3.5vw, 2.25rem);
+  font-size: clamp(1.25rem, 3vw, 1.75rem);
   margin: 0 0 var(--space-sm);
 }
 
 .slither-game-over-sub {
-  font-size: 0.95rem;
+  font-size: 0.875rem;
   color: var(--muted);
-  margin: 0 0 var(--space-lg);
+  margin: 0 0 var(--space-md);
 }
 
 .slither-game-over-actions {
@@ -229,6 +285,8 @@ body {
 
 .slither-game-over-cta {
   margin: 0;
+  padding: var(--space-xs) var(--space-sm);
+  font-size: 0.9rem;
 }
 
 .slither-game-over-cta.primary {
@@ -238,7 +296,11 @@ body {
 .slither-game-over-home {
   display: inline-block;
   text-decoration: none;
-  padding: var(--space-sm) var(--space-md);
+  padding: var(--space-xs) var(--space-sm);
+}
+
+.slither-win-overlay .slither-win-title {
+  color: var(--accent);
 }
 
 .slither-canvas-wrap {
@@ -254,23 +316,33 @@ body {
 }
 
 .slither-leaderboard {
-  grid-area: leaderboard;
-  background: var(--card);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: var(--radius-md);
+  position: absolute;
+  top: 48px;
+  right: 0;
+  z-index: 5;
+  min-width: 120px;
+  max-width: 160px;
   padding: var(--space-sm) var(--space-md);
-  min-width: 140px;
-  align-self: start;
+  background: var(--slither-hud-bg, rgba(0, 0, 0, 0.6));
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-right: none;
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
 }
 
 .slither-leaderboard-title {
   font-family: 'Space Grotesk', 'DM Sans', sans-serif;
   font-weight: 600;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   margin: 0 0 var(--space-sm);
   color: var(--muted);
+}
+
+.slither-speed-boost-cooldown {
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin: 0 0 var(--space-sm);
 }
 
 .slither-leaderboard-list {
@@ -284,7 +356,7 @@ body {
   align-items: center;
   gap: var(--space-xs);
   padding: var(--space-xs) 0;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
 }
 
 .slither-leaderboard-rank {
@@ -309,9 +381,9 @@ body {
 }
 
 .slither-controls-hint {
-  grid-column: 1 / -1;
+  flex-shrink: 0;
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 0.7rem;
   color: var(--muted);
 }
 
@@ -542,7 +614,7 @@ button {
   overflow: hidden;
   border: 4px solid #3d3d3d;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-  width: min(72vh, 540px);
+  width: min(80vh, 600px);
   max-width: 100%;
   transition: transform 0.35s ease;
 }
@@ -974,6 +1046,6 @@ button {
   }
 
   .board {
-    width: min(72vh, 92vw);
+    width: min(80vh, 92vw);
   }
 }

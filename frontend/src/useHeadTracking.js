@@ -13,6 +13,9 @@ import {
   getNoseAngleRadians,
   noseOffsetFromNormalized,
   medianPoint,
+  getMouthOpenness,
+  MOUTH_OPEN_THRESHOLD,
+  MOUTH_OPEN_RESET_THRESHOLD,
 } from './headTrackingConfig'
 import { drawTrackingOverlay } from './drawTrackingOverlay'
 
@@ -31,13 +34,14 @@ const BASELINE_BLEND_ALPHA = 0.1
 const BASELINE_DRIFT_ENABLED = false
 
 /**
- * @param {{ faceEnabled: boolean, onDirectionChange?: (vec: { x: number, y: number }) => void, onAngleChange?: (angleRadians: number) => void, sensitivity?: number }} options
+ * @param {{ faceEnabled: boolean, onDirectionChange?: (vec: { x: number, y: number }) => void, onAngleChange?: (angleRadians: number) => void, onMouthOpen?: () => void, sensitivity?: number }} options
  * @returns {{ videoRef: React.RefObject, canvasRef: React.RefObject, cameraStatus: string, headDirection: string | null, noseOffset: { x: number, y: number }, fps: number, trackingStatus: 'idle'|'loading'|'ready'|'error', isCalibrating: boolean, calibrationProgress: number, calibrationMessage: string, recalibrate: () => void, retry: () => void }}
  */
 export function useHeadTracking({
   faceEnabled,
   onDirectionChange,
   onAngleChange,
+  onMouthOpen,
   sensitivity = 1,
 }) {
   const [trackingStatus, setTrackingStatus] = useState('loading')
@@ -63,8 +67,11 @@ export function useHeadTracking({
   const lastUIThrottleRef = useRef(0)
   const onDirectionChangeRef = useRef(onDirectionChange)
   const onAngleChangeRef = useRef(onAngleChange)
+  const onMouthOpenRef = useRef(onMouthOpen)
   const isCalibratingRef = useRef(false)
   const calibrationSamplesRef = useRef([])
+  const mouthOpennessPrevRef = useRef(0)
+  const mouthOpenCanTriggerRef = useRef(true)
 
   useEffect(() => {
     onDirectionChangeRef.current = onDirectionChange
@@ -72,6 +79,9 @@ export function useHeadTracking({
   useEffect(() => {
     onAngleChangeRef.current = onAngleChange
   }, [onAngleChange])
+  useEffect(() => {
+    onMouthOpenRef.current = onMouthOpen
+  }, [onMouthOpen])
   useEffect(() => {
     faceEnabledRef.current = faceEnabled
   }, [faceEnabled])
@@ -253,6 +263,22 @@ export function useHeadTracking({
                     displayWidth: displayW,
                     displayHeight: displayH,
                   })
+                }
+              }
+              if (typeof onMouthOpenRef.current === 'function') {
+                const openness = getMouthOpenness(face)
+                const prev = mouthOpennessPrevRef.current
+                mouthOpennessPrevRef.current = openness
+                if (openness < MOUTH_OPEN_RESET_THRESHOLD) {
+                  mouthOpenCanTriggerRef.current = true
+                }
+                if (
+                  mouthOpenCanTriggerRef.current &&
+                  openness >= MOUTH_OPEN_THRESHOLD &&
+                  prev < MOUTH_OPEN_THRESHOLD
+                ) {
+                  mouthOpenCanTriggerRef.current = false
+                  onMouthOpenRef.current()
                 }
               }
               if (useAngleMode && noseAngle != null) {

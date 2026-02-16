@@ -14,6 +14,39 @@ export const UI_THROTTLE_MS = 120
 /** Number of nose samples to collect for hold-still calibration (~1–1.5 s at 60 fps) */
 export const CALIBRATION_SAMPLES_TARGET = 45
 
+/** MediaPipe face landmark indices for mouth openness (inner lip). */
+export const MOUTH_OPEN_INDEX_TOP = 13
+export const MOUTH_OPEN_INDEX_BOTTOM = 14
+/** Typical closed mouth ~0.01–0.02, open ~0.05–0.1; scale to 0–1. */
+export const MOUTH_OPEN_RANGE_MIN = 0.01
+export const MOUTH_OPEN_RANGE_MAX = 0.08
+/** Openness above this (0–1) triggers onMouthOpen. */
+export const MOUTH_OPEN_THRESHOLD = 0.35
+/** Must go below this before allowing another trigger. */
+export const MOUTH_OPEN_RESET_THRESHOLD = 0.2
+
+/**
+ * Mouth openness from face landmarks (0 = closed, 1 = open).
+ * @param {Array<{ x: number, y: number }>} faceLandmarks
+ * @returns {number} 0–1, or 0 if landmarks missing
+ */
+export function getMouthOpenness(faceLandmarks) {
+  if (
+    !faceLandmarks ||
+    faceLandmarks.length <= Math.max(MOUTH_OPEN_INDEX_TOP, MOUTH_OPEN_INDEX_BOTTOM)
+  ) {
+    return 0
+  }
+  const top = faceLandmarks[MOUTH_OPEN_INDEX_TOP]
+  const bottom = faceLandmarks[MOUTH_OPEN_INDEX_BOTTOM]
+  const raw = bottom.y - top.y
+  const clamped = Math.max(
+    MOUTH_OPEN_RANGE_MIN,
+    Math.min(MOUTH_OPEN_RANGE_MAX, raw),
+  )
+  return (clamped - MOUTH_OPEN_RANGE_MIN) / (MOUTH_OPEN_RANGE_MAX - MOUTH_OPEN_RANGE_MIN)
+}
+
 export const HEAD_DIRECTIONS = {
   UP: { x: 0, y: -1 },
   DOWN: { x: 0, y: 1 },
