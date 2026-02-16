@@ -1,4 +1,4 @@
-# CVified
+# CVify
 
 **Computer vision games in the browser.** Play with your face—no controllers, no backend. All camera and face processing runs locally via MediaPipe.
 
