@@ -143,13 +143,6 @@ export function useHeadTracking({
         videoRef.current.style.transform = 'scaleX(-1)'
         setTrackingStatus('ready')
         setCameraStatus('Head tracking active')
-        if (!baselineNoseRef.current) {
-          isCalibratingRef.current = true
-          calibrationSamplesRef.current = []
-          setIsCalibrating(true)
-          setCalibrationProgress(0)
-          setHasSeenFaceThisCalibration(false)
-        }
 
         const loop = () => {
           if (!active || !videoRef.current) return
@@ -177,14 +170,6 @@ export function useHeadTracking({
               const nose = face[NOSE_INDEX]
               const now = performance.now()
 
-              if (!baselineNoseRef.current && !isCalibratingRef.current) {
-                isCalibratingRef.current = true
-                calibrationSamplesRef.current = []
-                setIsCalibrating(true)
-                setCalibrationProgress(0)
-                setHasSeenFaceThisCalibration(false)
-              }
-
               if (isCalibratingRef.current) {
                 setHasSeenFaceThisCalibration(true)
                 calibrationSamplesRef.current.push({ x: nose.x, y: nose.y })
@@ -204,6 +189,15 @@ export function useHeadTracking({
                   setIsCalibrating(false)
                   setCalibrationProgress(0)
                   smoothedNoseRef.current = null
+                }
+                animationId = requestAnimationFrame(loop)
+                return
+              }
+
+              if (!baselineNoseRef.current) {
+                if (canvas) {
+                  const ctx = canvas.getContext('2d')
+                  if (ctx) clearOverlay()
                 }
                 animationId = requestAnimationFrame(loop)
                 return
@@ -248,12 +242,16 @@ export function useHeadTracking({
               if (canvas) {
                 const ctx = canvas.getContext('2d')
                 if (ctx) {
+                  const displayW = canvas.clientWidth || canvas.width
+                  const displayH = canvas.clientHeight || canvas.height
                   drawTrackingOverlay(ctx, canvas.width, canvas.height, {
                     nose: smoothNose,
                     direction: mirrored,
                     angle: noseAngle,
                     faceLandmarks: face,
                     mirror: true,
+                    displayWidth: displayW,
+                    displayHeight: displayH,
                   })
                 }
               }

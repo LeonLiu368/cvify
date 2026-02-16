@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useHeadTracking } from '../useHeadTracking'
+import { ResizableCameraPanel } from '../components/ResizableCameraPanel.jsx'
 import { getNextSnakeState, randomFood } from '../gameLogic'
 
 const GRID_SIZE = 18
@@ -20,7 +21,7 @@ const DIRECTIONS = {
 
 function loadBest() {
   try {
-    const v = parseInt(localStorage.getItem(BEST_STORAGE_KEY) ?? '0', 10)
+    const v = parseInt(window.localStorage.getItem(BEST_STORAGE_KEY) ?? '0', 10)
     return Number.isFinite(v) ? v : 0
   } catch {
     return 0
@@ -74,6 +75,10 @@ export function SnakeCVPage() {
     sensitivity,
   })
 
+  useEffect(() => {
+    headRecalibrate()
+  }, [headRecalibrate])
+
   const boardCells = useMemo(
     () => Array.from({ length: GRID_SIZE * GRID_SIZE }),
     [],
@@ -108,7 +113,7 @@ export function SnakeCVPage() {
   useEffect(() => {
     if (best > 0) {
       try {
-        localStorage.setItem(BEST_STORAGE_KEY, String(best))
+        window.localStorage.setItem(BEST_STORAGE_KEY, String(best))
       } catch {
         /* ignore */
       }
@@ -251,7 +256,11 @@ export function SnakeCVPage() {
             <input
               type="checkbox"
               checked={faceEnabled}
-              onChange={(event) => setFaceEnabled(event.target.checked)}
+              onChange={(event) => {
+                const next = event.target.checked
+                setFaceEnabled(next)
+                if (next) headRecalibrate()
+              }}
             />
             <span className="toggle-track" />
             <span className="toggle-knob" />
@@ -342,56 +351,55 @@ export function SnakeCVPage() {
             </div>
           ) : null}
         </div>
-
-        <div className="camera-panel">
-          <div className="camera-frame">
-            <video ref={videoRef} muted playsInline />
-            <canvas ref={canvasRef} />
-            {trackingStatus === 'error' ? (
-              <div className="camera-error-overlay">
-                <p className="camera-error-text">Camera access failed</p>
-                <button type="button" className="primary" onClick={headRetry}>
-                  Retry
-                </button>
-              </div>
-            ) : null}
-            {isCalibrating ? (
-              <div
-                className="camera-calibration-overlay"
-                role="status"
-                aria-live="polite"
-                aria-label="Calibrating head tracking"
-              >
-                <p className="camera-calibration-text">
-                  {calibrationMessage}
-                </p>
-                <div className="camera-calibration-bar" aria-hidden="true">
-                  <div
-                    className="camera-calibration-fill"
-                    style={{ width: `${calibrationProgress * 100}%` }}
-                  />
-                </div>
-              </div>
-            ) : null}
-            <div className="camera-badges">
-              <p className="fps-badge">{fps} fps</p>
-              {headDirection ? (
-                <p className="camera-direction">{headDirection}</p>
-              ) : null}
+      </main>
+      <ResizableCameraPanel storageKey="cvified_camera_snake">
+        <div className="camera-frame camera-frame-floating">
+          <video ref={videoRef} muted playsInline />
+          <canvas ref={canvasRef} />
+          {trackingStatus === 'error' ? (
+            <div className="camera-error-overlay">
+              <p className="camera-error-text">Camera access failed</p>
+              <button type="button" className="primary" onClick={headRetry}>
+                Retry
+              </button>
             </div>
-            <p className="camera-status">{cameraStatus}</p>
-            <div className="nose-compass" aria-hidden="true">
-              <span
-                className="nose-dot"
-                style={{
-                  transform: `translate(${noseVector.x}px, ${noseVector.y}px)`,
-                }}
-              />
-              <span className="nose-ring" />
+          ) : null}
+          {isCalibrating ? (
+            <div
+              className="camera-calibration-overlay"
+              role="status"
+              aria-live="polite"
+              aria-label="Calibrating head tracking"
+            >
+              <p className="camera-calibration-text">
+                {calibrationMessage}
+              </p>
+              <div className="camera-calibration-bar" aria-hidden="true">
+                <div
+                  className="camera-calibration-fill"
+                  style={{ width: `${calibrationProgress * 100}%` }}
+                />
+              </div>
             </div>
+          ) : null}
+          <div className="camera-badges">
+            <p className="fps-badge">{fps} fps</p>
+            {headDirection ? (
+              <p className="camera-direction">{headDirection}</p>
+            ) : null}
+          </div>
+          <p className="camera-status">{cameraStatus}</p>
+          <div className="nose-compass" aria-hidden="true">
+            <span
+              className="nose-dot"
+              style={{
+                transform: `translate(${noseVector.x}px, ${noseVector.y}px)`,
+              }}
+            />
+            <span className="nose-ring" />
           </div>
         </div>
-      </main>
+      </ResizableCameraPanel>
     </div>
   )
 }

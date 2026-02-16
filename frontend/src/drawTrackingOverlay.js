@@ -23,6 +23,8 @@ const FACE_CONTOUR_LINE_WIDTH = 1
 const FACE_MESH_SCALE_X = 1.7
 const FACE_MESH_CENTER = 0.5
 const NOSE_CENTER = 0.5
+/** Fixed size of the face mesh in display pixels so it doesn't scale when the camera panel is resized. */
+const FACE_MESH_FIXED_DISPLAY_SIZE = 200
 const DISTANCE_FOR_MAX_ARROW = 0.18
 
 /**
@@ -62,15 +64,27 @@ export function getNoseScreenPosition(noseRaw, width, height, mirror) {
  * @param {CanvasRenderingContext2D} ctx
  * @param {number} width - canvas width
  * @param {number} height - canvas height
- * @param {{ nose: { x: number, y: number }, direction?: string | null, angle?: number | null, faceLandmarks: Array<{x,y,z}> | null, mirror: boolean }} options
+ * @param {{ nose: { x: number, y: number }, direction?: string | null, angle?: number | null, faceLandmarks: Array<{x,y,z}> | null, mirror: boolean, displayWidth?: number, displayHeight?: number }} options
  */
 export function drawTrackingOverlay(ctx, width, height, options) {
-  const { nose, direction, angle: optionsAngle, faceLandmarks, mirror } = options
+  const {
+    nose,
+    direction,
+    angle: optionsAngle,
+    faceLandmarks,
+    mirror,
+    displayWidth,
+    displayHeight,
+  } = options
   ctx.clearRect(0, 0, width, height)
 
-  if (faceLandmarks && faceLandmarks.length) {
-    drawFaceMesh(ctx, width, height, faceLandmarks, mirror)
-  }
+  // Face mesh temporarily disabled
+  // if (faceLandmarks && faceLandmarks.length) {
+  //   drawFaceMesh(ctx, width, height, faceLandmarks, mirror, {
+  //     displayWidth,
+  //     displayHeight,
+  //   })
+  // }
 
   const noseRaw =
     faceLandmarks && faceLandmarks[NOSE_INDEX]
@@ -133,12 +147,7 @@ export function drawTrackingOverlay(ctx, width, height, options) {
 }
 
 /**
- * Draw full face mesh (tesselation) then contours on top so the face is fully covered.
- * @param {CanvasRenderingContext2D} ctx
- * @param {number} width
- * @param {number} height
- * @param {Array<{ x: number, y: number }>} landmarks
- * @param {boolean} mirror
+ * Map normalized landmark to pixel coords (full canvas / video space).
  */
 function landmarkToPixel(nx, ny, width, height, mirror) {
   const x = mirror ? 1 - nx : nx
@@ -148,8 +157,81 @@ function landmarkToPixel(nx, ny, width, height, mirror) {
   return { x: scaledX, y }
 }
 
-function drawFaceMesh(ctx, width, height, landmarks, mirror) {
+/**
+ * Map normalized landmark to pixel coords inside a fixed display-size box in buffer space.
+ * Keeps the mesh the same on-screen size when the camera panel is resized.
+ */
+function landmarkToPixelFixedSize(
+  nx,
+  ny,
+  centerX,
+  centerY,
+  boxWidthBuf,
+  boxHeightBuf,
+  mirror,
+) {
+  const x = mirror ? 1 - nx : nx
+  const scaledX =
+    centerX +
+    (FACE_MESH_CENTER + (x - FACE_MESH_CENTER) * FACE_MESH_SCALE_X - 0.5) *
+      boxWidthBuf
+  const y = centerY + (ny - 0.5) * boxHeightBuf
+  return { x: scaledX, y }
+}
+
+/**
+ * Draw full face mesh (tesselation) then contours on top so the face is fully covered.
+ * When displayWidth/displayHeight are provided, the mesh is drawn in a fixed display-size
+ * box (centered on the face) so it keeps the same on-screen size when the camera is resized.
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} width - buffer width
+ * @param {number} height - buffer height
+ * @param {Array<{ x: number, y: number }>} landmarks
+ * @param {boolean} mirror
+ * @param {{ displayWidth?: number, displayHeight?: number }} [displaySize]
+ */
+function drawFaceMesh(ctx, width, height, landmarks, mirror, displaySize) {
   if (!landmarks || !landmarks.length) return
+  const useFixedSize =
+    displaySize &&
+    displaySize.displayWidth > 0 &&
+    displaySize.displayHeight > 0
+  let centerX = width / 2
+  let centerY = height / 2
+  let boxWidthBuf = width
+  let boxHeightBuf = height
+  if (useFixedSize) {
+    let sumX = 0
+    let sumY = 0
+    for (let k = 0; k < landmarks.length; k++) {
+      sumX += landmarks[k].x
+      sumY += landmarks[k].y
+    }
+    const n = landmarks.length
+    const cxNorm = sumX / n
+    const cyNorm = sumY / n
+    const centerPixel = landmarkToPixel(cxNorm, cyNorm, width, height, mirror)
+    centerX = centerPixel.x
+    centerY = centerPixel.y
+    boxWidthBuf =
+      FACE_MESH_FIXED_DISPLAY_SIZE * (width / displaySize.displayWidth)
+    boxHeightBuf =
+      FACE_MESH_FIXED_DISPLAY_SIZE * (height / displaySize.displayHeight)
+  }
+
+  const toPixel = useFixedSize
+    ? (nx, ny) =>
+        landmarkToPixelFixedSize(
+          nx,
+          ny,
+          centerX,
+          centerY,
+          boxWidthBuf,
+          boxHeightBuf,
+          mirror,
+        )
+    : (nx, ny) => landmarkToPixel(nx, ny, width, height, mirror)
+
   ctx.save()
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
@@ -167,8 +249,8 @@ function drawFaceMesh(ctx, width, height, landmarks, mirror) {
       if (i >= landmarks.length || j >= landmarks.length) continue
       const a = landmarks[i]
       const b = landmarks[j]
-      const p1 = landmarkToPixel(a.x, a.y, width, height, mirror)
-      const p2 = landmarkToPixel(b.x, b.y, width, height, mirror)
+      const p1 = toPixel(a.x, a.y)
+      const p2 = toPixel(b.x, b.y)
       ctx.moveTo(p1.x, p1.y)
       ctx.lineTo(p2.x, p2.y)
     }
@@ -182,8 +264,8 @@ function drawFaceMesh(ctx, width, height, landmarks, mirror) {
     if (i >= landmarks.length || j >= landmarks.length) continue
     const a = landmarks[i]
     const b = landmarks[j]
-    const p1 = landmarkToPixel(a.x, a.y, width, height, mirror)
-    const p2 = landmarkToPixel(b.x, b.y, width, height, mirror)
+    const p1 = toPixel(a.x, a.y)
+    const p2 = toPixel(b.x, b.y)
     ctx.moveTo(p1.x, p1.y)
     ctx.lineTo(p2.x, p2.y)
   }

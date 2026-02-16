@@ -4,6 +4,7 @@ import { createInitialState, tick, getSnakeLength } from '../slither/slitherLogi
 import { computeTargetAngles } from '../slither/botAI.js'
 import { SlitherView } from '../slither/SlitherView.jsx'
 import { useHeadTracking } from '../useHeadTracking.js'
+import { ResizableCameraPanel } from '../components/ResizableCameraPanel.jsx'
 
 const FIXED_DT = 1 / 60
 const PLAYER_TURN_RATE = 3
@@ -25,6 +26,7 @@ export function SlitherPage() {
   const playerCVAngleRef = useRef(null)
   const [faceEnabled, setFaceEnabled] = useState(true)
   const [sensitivity, setSensitivity] = useState(1)
+  const [gameOver, setGameOver] = useState(false)
 
   const handleAngleChange = useCallback((angle) => {
     playerCVAngleRef.current = angle
@@ -51,6 +53,10 @@ export function SlitherPage() {
   useEffect(() => {
     if (!faceEnabled) playerCVAngleRef.current = null
   }, [faceEnabled])
+
+  useEffect(() => {
+    headRecalibrate()
+  }, [headRecalibrate])
 
   const handleMouseMove = useCallback((worldX, worldY) => {
     playerMouseWorld.current = { x: worldX, y: worldY }
@@ -106,6 +112,12 @@ export function SlitherPage() {
         targetAngles = { ...targetAngles, player: target }
       }
       const { state: nextState } = tick(current, dt, targetAngles)
+      const playerWasAlive = current.snakes.some((s) => s.isPlayer)
+      const playerAliveNow = nextState.snakes.some((s) => s.isPlayer)
+      if (playerWasAlive && !playerAliveNow) {
+        setRunning(false)
+        setGameOver(true)
+      }
       stateRef.current = nextState
       setState(nextState)
       raf = requestAnimationFrame(loop)
@@ -115,9 +127,12 @@ export function SlitherPage() {
   }, [running, faceEnabled])
 
   const handleRestart = useCallback(() => {
+    setGameOver(false)
     setState(createInitialState())
     lastTime.current = performance.now() / 1000
-  }, [])
+    headRecalibrate()
+    setRunning(true)
+  }, [headRecalibrate])
 
   const leaderboard = [...state.snakes]
     .sort((a, b) => getSnakeLength(b) - getSnakeLength(a))
@@ -151,7 +166,11 @@ export function SlitherPage() {
             <input
               type="checkbox"
               checked={faceEnabled}
-              onChange={(e) => setFaceEnabled(e.target.checked)}
+              onChange={(e) => {
+                const next = e.target.checked
+                setFaceEnabled(next)
+                if (next) headRecalibrate()
+              }}
             />
             <span className="toggle-track" />
             <span className="toggle-knob" />
@@ -171,11 +190,38 @@ export function SlitherPage() {
           </label>
         </div>
       </header>
-      <div className="slither-arena">
+      <div className="slither-arena slither-arena-wrap">
         <SlitherView state={state} onMouseMove={handleMouseMove} />
+        {gameOver ? (
+          <div
+            className="slither-game-over-overlay"
+            role="dialog"
+            aria-label="Game Over"
+          >
+            <div className="slither-game-over-content">
+              <h2 className="slither-game-over-title">Game Over</h2>
+              <p className="slither-game-over-sub">You were eliminated.</p>
+              <div className="slither-game-over-actions">
+                <button
+                  type="button"
+                  className="primary slither-game-over-cta"
+                  onClick={handleRestart}
+                >
+                  Restart
+                </button>
+                <Link
+                  to="/"
+                  className="ghost slither-game-over-cta slither-game-over-home"
+                >
+                  Return to home
+                </Link>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
-      <div className="slither-camera-panel">
-        <div className="camera-frame">
+      <ResizableCameraPanel storageKey="cvified_camera_slither">
+        <div className="camera-frame camera-frame-floating">
           <video ref={videoRef} muted playsInline />
           <canvas ref={canvasRef} />
           {trackingStatus === 'error' ? (
@@ -216,7 +262,7 @@ export function SlitherPage() {
             <span className="nose-ring" />
           </div>
         </div>
-      </div>
+      </ResizableCameraPanel>
       <p className="slither-controls-hint">
         Move mouse or use your face to steer. Arrow keys to turn. Avoid other snakes and walls.
       </p>
