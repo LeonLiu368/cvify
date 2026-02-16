@@ -5,8 +5,8 @@ import { ResizableCameraPanel } from '../components/ResizableCameraPanel.jsx'
 import { getNextSnakeState, randomFood } from '../gameLogic'
 
 const GRID_SIZE = 18
-const START_SPEED = 140
-const SPEED_MIN = 80
+const START_SPEED = 200
+const SPEED_MIN = 50
 const BEST_STORAGE_KEY = 'snakecv_best'
 const DIRECTIONS = {
   ArrowUp: { x: 0, y: -1 },
