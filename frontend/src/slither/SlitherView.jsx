@@ -13,6 +13,120 @@ function brightenColor(hex, amount) {
   return `rgb(${r2},${g2},${b2})`
 }
 
+const EPS = 1e-6
+/** Allow crossings at segment endpoints (t === 0 or t === 1) so we split at the boundary until the last piece has crossed. */
+const T_MIN = -1e-6
+const T_MAX = 1 + 1e-6
+
+/**
+ * Return 1 or 2 line segments to draw a toroidal line from p1 to p2.
+ * Draw as two segments when the segment crosses a boundary; as one only when both
+ * endpoints are on the same side (i.e. the last piece has crossed the boundary).
+ * Each segment is [x1, y1, x2, y2] in world coords within bounds.
+ * @param {{ x: number, y: number }} p1
+ * @param {{ x: number, y: number }} p2
+ * @param {{ width: number, height: number }} bounds
+ * @returns {Array<[number, number, number, number]>}
+ */
+function toroidalLineSegments(p1, p2, bounds) {
+  const w = bounds.width
+  const h = bounds.height
+  const rawDx = p2.x - p1.x
+  const rawDy = p2.y - p1.y
+  let dx = rawDx - w * Math.round(rawDx / w)
+  let dy = rawDy - h * Math.round(rawDy / h)
+  const crosses = []
+  if (Math.abs(dx) > EPS) {
+    const t0 = (0 - p1.x) / dx
+    if (t0 >= T_MIN && t0 <= T_MAX) crosses.push({ t: t0, x: 0, y: p1.y + t0 * dy, edge: 'x0' })
+    const t1 = (w - p1.x) / dx
+    if (t1 >= T_MIN && t1 <= T_MAX) crosses.push({ t: t1, x: w, y: p1.y + t1 * dy, edge: 'x1' })
+  }
+  if (Math.abs(dy) > EPS) {
+    const t0 = (0 - p1.y) / dy
+    if (t0 >= T_MIN && t0 <= T_MAX) crosses.push({ t: t0, x: p1.x + t0 * dx, y: 0, edge: 'y0' })
+    const t1 = (h - p1.y) / dy
+    if (t1 >= T_MIN && t1 <= T_MAX) crosses.push({ t: t1, x: p1.x + t1 * dx, y: h, edge: 'y1' })
+  }
+  // Segment straddles boundary but |dx| or |dy| is below EPS (both points very close to opposite edges).
+  // Force split so we draw two segments until fully crossed.
+  const straddleX = Math.abs(rawDx) > w / 2
+  const straddleY = Math.abs(rawDy) > h / 2
+  if (crosses.length === 0) {
+    if (straddleX && !straddleY) {
+      return [
+        [p1.x, p1.y, w, p1.y],
+        [0, p1.y, p2.x, p2.y],
+      ]
+    }
+    if (straddleY && !straddleX) {
+      return [
+        [p1.x, p1.y, p1.x, h],
+        [p1.x, 0, p2.x, p2.y],
+      ]
+    }
+    if (straddleX && straddleY) {
+      // Corner: split on both; use x first then y for consistent ordering.
+      return [
+        [p1.x, p1.y, w, p1.y],
+        [0, p1.y, p2.x, p2.y],
+      ]
+    }
+    return [[p1.x, p1.y, p2.x, p2.y]]
+  }
+  crosses.sort((a, b) => a.t - b.t)
+  const texit = crosses[0]
+  const tenter = crosses.length >= 2 ? crosses[crosses.length - 1] : null
+  const exitX = texit.x
+  const exitY = texit.y
+  let reX = tenter ? tenter.x : exitX
+  let reY = tenter ? tenter.y : exitY
+  if (tenter) {
+    if (tenter.edge === 'x0') reX = w
+    else if (tenter.edge === 'x1') reX = 0
+    else if (tenter.edge === 'y0') reY = h
+    else if (tenter.edge === 'y1') reY = 0
+  } else {
+    if (texit.edge === 'x0') reX = w
+    else if (texit.edge === 'x1') reX = 0
+    else if (texit.edge === 'y0') reY = h
+    else if (texit.edge === 'y1') reY = 0
+  }
+  return [
+    [p1.x, p1.y, exitX, exitY],
+    [reX, reY, p2.x, p2.y],
+  ]
+}
+
+/** Draw a toroidal polyline (snake body) with ctx.moveTo/lineTo. */
+function strokeToroidalPath(ctx, points, bounds) {
+  if (points.length < 2) return
+  for (let i = 1; i < points.length; i++) {
+    const parts = toroidalLineSegments(points[i - 1], points[i], bounds)
+    for (const s of parts) {
+      ctx.moveTo(s[0], s[1])
+      ctx.lineTo(s[2], s[3])
+    }
+  }
+}
+
+/** Margin from edge (world units) at which to also draw on the opposite side. */
+const WRAP_DRAW_MARGIN = 120
+
+/**
+ * Yield (x, y) positions at which to draw a point so it appears on both sides when near an edge.
+ * First yield is always (px, py); then wrapped positions for edges the point is near.
+ */
+function* toroidalDrawPositions(px, py, bounds) {
+  yield [px, py]
+  const w = bounds.width
+  const h = bounds.height
+  if (px < WRAP_DRAW_MARGIN) yield [px + w, py]
+  if (px > w - WRAP_DRAW_MARGIN) yield [px - w, py]
+  if (py < WRAP_DRAW_MARGIN) yield [px, py + h]
+  if (py > h - WRAP_DRAW_MARGIN) yield [px, py - h]
+}
+
 /**
  * Canvas renderer for slither game state.
  * Camera follows the longest snake or the player snake; reports mouse position in world coords.
@@ -21,11 +135,26 @@ function brightenColor(hex, amount) {
 const MINIMAP_SIZE = 140
 const MINIMAP_MARGIN = 4
 
+/** Unwrap focus so camera moves continuously when head crosses boundary (no jump). */
+function unwrapFocus(focus, prev, w, h) {
+  if (prev == null || prev.x == null) return { x: focus.x, y: focus.y }
+  let x = focus.x
+  let y = focus.y
+  const dx = focus.x - prev.x
+  const dy = focus.y - prev.y
+  if (dx > w / 2) x = focus.x - w
+  else if (dx < -w / 2) x = focus.x + w
+  if (dy > h / 2) y = focus.y - h
+  else if (dy < -h / 2) y = focus.y + h
+  return { x, y }
+}
+
 export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimationProgress, speedBoostActive, speedBoostProgress }) {
   const canvasRef = useRef(null)
   const minimapRef = useRef(null)
   const wrapRef = useRef(null)
   const cameraRef = useRef({ scale: 1, camX: 0, camY: 0 })
+  const cameraWorldRef = useRef(null)
   const [resizeTick, setResizeTick] = useState(0)
 
   useEffect(() => {
@@ -68,6 +197,11 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
         (player ?? longest)?.segments?.[0]) ??
       { x: bounds.width / 2, y: bounds.height / 2 }
 
+    const w = bounds.width
+    const h = bounds.height
+    const cameraWorld = unwrapFocus(focus, cameraWorldRef.current, w, h)
+    cameraWorldRef.current = cameraWorld
+
     let scale = Math.min(
       canvas.width / (bounds.width * 0.5),
       canvas.height / (bounds.height * 0.5),
@@ -76,8 +210,8 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
     if (speedBoostActive && speedBoostProgress != null) {
       scale = scale * (1 - 0.15 * Math.sin(speedBoostProgress * Math.PI))
     }
-    const camX = canvas.width / 2 - focus.x * scale
-    const camY = canvas.height / 2 - focus.y * scale
+    const camX = canvas.width / 2 - cameraWorld.x * scale
+    const camY = canvas.height / 2 - cameraWorld.y * scale
     cameraRef.current = { scale, camX, camY }
 
     ctx.save()
@@ -89,21 +223,39 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
     ctx.translate(camX, camY)
     ctx.scale(scale, scale)
 
-    ctx.strokeStyle = 'rgba(255,255,255,0.04)'
-    ctx.lineWidth = 1 / scale
-    ctx.strokeRect(0, 0, bounds.width, bounds.height)
+    const toroidalOffsets = [
+      { x: 0, y: 0 },
+      { x: -w, y: 0 },
+      { x: w, y: 0 },
+      { x: 0, y: -h },
+      { x: 0, y: h },
+      { x: -w, y: -h },
+      { x: -w, y: h },
+      { x: w, y: -h },
+      { x: w, y: h },
+    ]
 
-    for (const pellet of pellets) {
-      ctx.fillStyle = 'rgba(255, 200, 60, 1)'
-      ctx.beginPath()
-      ctx.arc(pellet.x, pellet.y, PELLET_RADIUS, 0, Math.PI * 2)
-      ctx.fill()
-      ctx.strokeStyle = 'rgba(255, 230, 120, 0.8)'
-      ctx.lineWidth = 1.5 / scale
-      ctx.stroke()
-    }
+    for (const offset of toroidalOffsets) {
+      ctx.save()
+      ctx.translate(offset.x, offset.y)
 
-    for (const snake of snakes) {
+      for (const pellet of pellets) {
+        const positions =
+          offset.x === 0 && offset.y === 0
+            ? toroidalDrawPositions(pellet.x, pellet.y, bounds)
+            : [[pellet.x, pellet.y]]
+        for (const [px, py] of positions) {
+          ctx.fillStyle = 'rgba(255, 200, 60, 1)'
+          ctx.beginPath()
+          ctx.arc(px, py, PELLET_RADIUS, 0, Math.PI * 2)
+          ctx.fill()
+          ctx.strokeStyle = 'rgba(255, 230, 120, 0.8)'
+          ctx.lineWidth = 1.5 / scale
+          ctx.stroke()
+        }
+      }
+
+      for (const snake of snakes) {
       const segs = snake.segments
       if (segs.length < 2) continue
       ctx.lineCap = 'round'
@@ -112,10 +264,7 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
       const head = segs[0]
       const tail = segs[segs.length - 1]
       ctx.beginPath()
-      ctx.moveTo(segs[0].x, segs[0].y)
-      for (let i = 1; i < segs.length; i++) {
-        ctx.lineTo(segs[i].x, segs[i].y)
-      }
+      strokeToroidalPath(ctx, segs, bounds)
       const isPlayerBoost = snake.isPlayer && speedBoostActive && speedBoostProgress != null
       if (isPlayerBoost) {
         const pulse = 0.5 + 0.5 * Math.sin(speedBoostProgress * Math.PI * 6)
@@ -128,10 +277,7 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
         ctx.stroke()
         ctx.restore()
         ctx.beginPath()
-        ctx.moveTo(segs[0].x, segs[0].y)
-        for (let i = 1; i < segs.length; i++) {
-          ctx.lineTo(segs[i].x, segs[i].y)
-        }
+        strokeToroidalPath(ctx, segs, bounds)
       }
       ctx.strokeStyle = 'rgba(0,0,0,0.2)'
       ctx.lineWidth = bodyWidth + 6 / scale
@@ -141,21 +287,30 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
       grad.addColorStop(1, snake.color)
       ctx.strokeStyle = grad
       ctx.lineWidth = bodyWidth
+      ctx.beginPath()
+      strokeToroidalPath(ctx, segs, bounds)
       ctx.stroke()
       ctx.fillStyle = snake.color
-      ctx.beginPath()
-      ctx.arc(head.x, head.y, HEAD_RADIUS, 0, Math.PI * 2)
-      ctx.fill()
-      ctx.strokeStyle = 'rgba(255,255,255,0.45)'
-      ctx.lineWidth = 1.2 / scale
-      ctx.stroke()
-      ctx.fillStyle = 'rgba(255,255,255,0.35)'
-      ctx.beginPath()
-      ctx.arc(head.x - 2.5, head.y - 2.5, HEAD_RADIUS * 0.35, 0, Math.PI * 2)
-      ctx.fill()
+      const headPositions =
+        offset.x === 0 && offset.y === 0
+          ? toroidalDrawPositions(head.x, head.y, bounds)
+          : [[head.x, head.y]]
+      for (const [hx, hy] of headPositions) {
+        ctx.beginPath()
+        ctx.arc(hx, hy, HEAD_RADIUS, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.strokeStyle = 'rgba(255,255,255,0.45)'
+        ctx.lineWidth = 1.2 / scale
+        ctx.stroke()
+        ctx.fillStyle = 'rgba(255,255,255,0.35)'
+        ctx.beginPath()
+        ctx.arc(hx - 2.5, hy - 2.5, HEAD_RADIUS * 0.35, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.fillStyle = snake.color
+      }
     }
 
-    if (playerDeadSnake && deathAnimationProgress != null && deathAnimationProgress < 1) {
+      if (playerDeadSnake && deathAnimationProgress != null && deathAnimationProgress < 1) {
       const snake = playerDeadSnake
       const segs = snake.segments
       if (segs.length >= 2) {
@@ -172,10 +327,7 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
         ctx.lineJoin = 'round'
         const bodyWidth = (BODY_RADIUS * 2) / scale
         ctx.beginPath()
-        ctx.moveTo(segs[0].x, segs[0].y)
-        for (let i = 1; i < segs.length; i++) {
-          ctx.lineTo(segs[i].x, segs[i].y)
-        }
+        strokeToroidalPath(ctx, segs, bounds)
         ctx.strokeStyle = 'rgba(0,0,0,0.2)'
         ctx.lineWidth = bodyWidth + 6 / scale
         ctx.stroke()
@@ -184,16 +336,28 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
         grad.addColorStop(1, snake.color)
         ctx.strokeStyle = grad
         ctx.lineWidth = bodyWidth
+        ctx.beginPath()
+        strokeToroidalPath(ctx, segs, bounds)
         ctx.stroke()
         ctx.fillStyle = snake.color
-        ctx.beginPath()
-        ctx.arc(head.x, head.y, HEAD_RADIUS, 0, Math.PI * 2)
-        ctx.fill()
-        ctx.strokeStyle = 'rgba(255,255,255,0.45)'
-        ctx.lineWidth = 1.2 / scale
-        ctx.stroke()
+        const deadHeadPositions =
+          offset.x === 0 && offset.y === 0
+            ? toroidalDrawPositions(head.x, head.y, bounds)
+            : [[head.x, head.y]]
+        for (const [hx, hy] of deadHeadPositions) {
+          ctx.beginPath()
+          ctx.arc(hx, hy, HEAD_RADIUS, 0, Math.PI * 2)
+          ctx.fill()
+          ctx.strokeStyle = 'rgba(255,255,255,0.45)'
+          ctx.lineWidth = 1.2 / scale
+          ctx.stroke()
+          ctx.fillStyle = snake.color
+        }
         ctx.restore()
       }
+    }
+
+      ctx.restore()
     }
 
     ctx.restore()

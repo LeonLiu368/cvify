@@ -4,16 +4,16 @@
  */
 
 export const SEGMENT_SPACING = 8
-export const HEAD_RADIUS = 10
-export const BODY_RADIUS = 8
+export const HEAD_RADIUS = 15
+export const BODY_RADIUS = 15
 export const PELLET_RADIUS = 6
 /** Extra radius for pellet collection (magnet effect). */
 export const MAGNET_RADIUS = 50
 export const DEFAULT_SPEED = 400
-export const TURN_SPEED = 4
-export const PELLET_VALUE = 1
+export const TURN_SPEED = 6
+export const PELLET_VALUE = 2
 export const DEATH_PELLET_FRACTION = 0.4
-export const INITIAL_LENGTH = 15
+export const INITIAL_LENGTH = 30
 export const PELLET_SPAWN_INTERVAL = 2
 export const ARENA_PADDING = 40
 
@@ -164,11 +164,18 @@ function moveSnake(snake, dt, targetAngle, bounds) {
   const dy = Math.sin(angle) * snake.speed * dt
   let newHead = wrapPoint({ x: head.x + dx, y: head.y + dy }, bounds)
 
+  const w = bounds.width
+  const h = bounds.height
   const segments = [newHead]
   let prev = newHead
   for (let i = 1; i < snake.segments.length; i++) {
     const curr = snake.segments[i]
-    const d = Math.hypot(prev.x - curr.x, prev.y - curr.y)
+    // Use toroidal (shortest) direction so segments follow the wrap and don't jump to the head's side.
+    let tdx = curr.x - prev.x
+    let tdy = curr.y - prev.y
+    tdx = tdx - w * Math.round(tdx / w)
+    tdy = tdy - h * Math.round(tdy / h)
+    const d = Math.hypot(tdx, tdy)
     let next
     if (d <= 1e-6) {
       next = {
@@ -177,11 +184,12 @@ function moveSnake(snake, dt, targetAngle, bounds) {
       }
     } else {
       next = {
-        x: prev.x + ((curr.x - prev.x) / d) * SEGMENT_SPACING,
-        y: prev.y + ((curr.y - prev.y) / d) * SEGMENT_SPACING,
+        x: prev.x + (tdx / d) * SEGMENT_SPACING,
+        y: prev.y + (tdy / d) * SEGMENT_SPACING,
       }
     }
-    segments.push(wrapPoint(next, bounds))
+    const wrappedNext = wrapPoint(next, bounds)
+    segments.push(wrappedNext)
     prev = segments[segments.length - 1]
   }
 
