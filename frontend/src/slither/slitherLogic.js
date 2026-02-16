@@ -9,7 +9,11 @@ export const BODY_RADIUS = 15
 export const PELLET_RADIUS = 30
 /** Extra radius for pellet collection (magnet effect). */
 export const MAGNET_RADIUS = 100
-export const DEFAULT_SPEED = 400
+export const DEFAULT_SPEED = 600
+/** Speed multiplier per segment over initial length (e.g. 0.006 = 0.6% per pellet). */
+export const SPEED_GROWTH_PER_SEGMENT = 0.006
+/** Max speed multiplier from growth (cap so long snakes don't go crazy). */
+export const SPEED_GROWTH_CAP = 1.6
 export const TURN_SPEED = 6
 export const PELLET_VALUE = 2
 export const DEATH_PELLET_FRACTION = 0.4
@@ -160,8 +164,11 @@ function moveSnake(snake, dt, targetAngle, bounds) {
   angle += diff * Math.min(1, snake.turnSpeed * dt)
   angle = normalizeAngle(angle)
 
-  const dx = Math.cos(angle) * snake.speed * dt
-  const dy = Math.sin(angle) * snake.speed * dt
+  const extraSegments = Math.max(0, snake.segments.length - INITIAL_LENGTH)
+  const growthMul = Math.min(SPEED_GROWTH_CAP, 1 + extraSegments * SPEED_GROWTH_PER_SEGMENT)
+  const effectiveSpeed = snake.speed * growthMul
+  const dx = Math.cos(angle) * effectiveSpeed * dt
+  const dy = Math.sin(angle) * effectiveSpeed * dt
   let newHead = wrapPoint({ x: head.x + dx, y: head.y + dy }, bounds)
 
   const w = bounds.width

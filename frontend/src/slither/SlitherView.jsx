@@ -240,35 +240,41 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
       ctx.save()
       ctx.translate(offset.x, offset.y)
 
-      const collectRadius = HEAD_RADIUS + PELLET_RADIUS + MAGNET_RADIUS + 150 
+      const collectRadius = HEAD_RADIUS + PELLET_RADIUS + MAGNET_RADIUS + 150
+      const magnetPull = 0.3
+      const magnetShrink = 0.5
+      const magnetFade = 0.35
       for (const pellet of pellets) {
         const distSq = toroidalDistSq(focus, pellet, bounds)
         const dist = Math.sqrt(distSq)
-        const absorption = Math.max(0, 1 - dist / collectRadius)
+        const t = Math.max(0, 1 - dist / collectRadius)
+        const absorption = t * t * (3 - 2 * t)
         let pullX = 0
         let pullY = 0
         if (absorption > 0) {
           pullX = (focus.x - pellet.x) - w * Math.round((focus.x - pellet.x) / w)
           pullY = (focus.y - pellet.y) - h * Math.round((focus.y - pellet.y) / h)
-          pullX *= absorption * 0.35
-          pullY *= absorption * 0.35
+          const pull = absorption * magnetPull
+          pullX *= pull
+          pullY *= pull
         }
         const valueMult = 1 + (pellet.value - 1) * 0.2
+        const sizeMult = 1 - absorption * magnetShrink
+        const alpha = 1 - absorption * magnetFade
         const positions =
           offset.x === 0 && offset.y === 0
             ? toroidalDrawPositions(pellet.x, pellet.y, bounds)
             : [[pellet.x, pellet.y]]
+        const usePull = offset.x === 0 && offset.y === 0
         for (const [px, py] of positions) {
-          const usePull = offset.x === 0 && offset.y === 0
           const drawX = usePull ? px + pullX : px
           const drawY = usePull ? py + pullY : py
-          const sizeMult = 1 - absorption * 0.55
           const r = PELLET_RADIUS * pelletPulse * sizeMult
           const highlightOffset = r * 0.35
           const cx = drawX - highlightOffset
           const cy = drawY - highlightOffset
           ctx.save()
-          ctx.globalAlpha = 1 - absorption * 0.4
+          ctx.globalAlpha = alpha
           ctx.shadowColor = 'rgba(255, 100, 0, 0.9)'
           ctx.shadowBlur = (12 * valueMult * sizeMult) / scale
           const orbGrad = ctx.createRadialGradient(cx, cy, 0, drawX, drawY, r)
@@ -282,9 +288,6 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
           ctx.beginPath()
           ctx.arc(drawX, drawY, r, 0, Math.PI * 2)
           ctx.fill()
-          ctx.restore()
-          ctx.save()
-          ctx.globalAlpha = 1 - absorption * 0.4
           ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'
           ctx.beginPath()
           ctx.arc(cx - r * 0.15, cy - r * 0.15, r * 0.28, 0, Math.PI * 2)
