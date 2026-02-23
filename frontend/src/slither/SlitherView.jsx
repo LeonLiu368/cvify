@@ -118,6 +118,60 @@ function strokeToroidalPath(ctx, points, bounds) {
   }
 }
 
+/** Length of a segment [x1, y1, x2, y2]. */
+function segmentLength(s) {
+  const dx = s[2] - s[0]
+  const dy = s[3] - s[1]
+  return Math.sqrt(dx * dx + dy * dy)
+}
+
+/**
+ * Draw toroidal path with a gradient that follows the path (head to tail).
+ * Keeps gradient clean when the snake crosses map boundaries.
+ */
+function strokeToroidalPathWithGradient(ctx, points, bounds, colorHead, colorTail, lineWidth) {
+  if (points.length < 2) return
+  const parts = []
+  for (let i = 1; i < points.length; i++) {
+    const segs = toroidalLineSegments(points[i - 1], points[i], bounds)
+    for (const s of segs) parts.push(s)
+  }
+  let totalLen = 0
+  for (const s of parts) totalLen += segmentLength(s)
+  if (totalLen <= 0) return
+  const parseColor = (c) => {
+    if (c.startsWith('rgb')) {
+      const match = c.match(/\d+/g)
+      return match ? match.slice(0, 3).map(Number) : [255, 255, 255]
+    }
+    const n = parseInt(c.replace('#', ''), 16)
+    return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff]
+  }
+  const lerp = (a, b, t) => {
+    const [r1, g1, b1] = parseColor(a)
+    const [r2, g2, b2] = parseColor(b)
+    return `rgb(${Math.round(r1 + (r2 - r1) * t)},${Math.round(g1 + (g2 - g1) * t)},${Math.round(b1 + (b2 - b1) * t)})`
+  }
+  let run = 0
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  ctx.lineWidth = lineWidth
+  for (const s of parts) {
+    const len = segmentLength(s)
+    const t0 = run / totalLen
+    const t1 = (run + len) / totalLen
+    run += len
+    const grad = ctx.createLinearGradient(s[0], s[1], s[2], s[3])
+    grad.addColorStop(0, lerp(colorHead, colorTail, t0))
+    grad.addColorStop(1, lerp(colorHead, colorTail, t1))
+    ctx.strokeStyle = grad
+    ctx.beginPath()
+    ctx.moveTo(s[0], s[1])
+    ctx.lineTo(s[2], s[3])
+    ctx.stroke()
+  }
+}
+
 /** Margin from edge (world units) at which to also draw on the opposite side. */
 const WRAP_DRAW_MARGIN = 120
 
@@ -148,7 +202,6 @@ function drawDeathAnimation(ctx, snake, progress, bounds, scale, offset) {
   const segs = snake.segments
   if (segs.length < 2) return
   const head = segs[0]
-  const tail = segs[segs.length - 1]
   const s = Math.max(0.01, 1 - 0.5 * progress)
   ctx.save()
   ctx.globalAlpha = 1 - progress
@@ -163,14 +216,14 @@ function drawDeathAnimation(ctx, snake, progress, bounds, scale, offset) {
   ctx.strokeStyle = 'rgba(0,0,0,0.2)'
   ctx.lineWidth = bodyWidth + 6 / scale
   ctx.stroke()
-  const grad = ctx.createLinearGradient(head.x, head.y, tail.x, tail.y)
-  grad.addColorStop(0, brightenColor(snake.color, 0.35))
-  grad.addColorStop(1, snake.color)
-  ctx.strokeStyle = grad
-  ctx.lineWidth = bodyWidth
-  ctx.beginPath()
-  strokeToroidalPath(ctx, segs, bounds)
-  ctx.stroke()
+  strokeToroidalPathWithGradient(
+    ctx,
+    segs,
+    bounds,
+    brightenColor(snake.color, 0.35),
+    snake.color,
+    bodyWidth,
+  )
   ctx.fillStyle = snake.color
   const headPositions =
     offset.x === 0 && offset.y === 0
@@ -215,8 +268,8 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
     const canvas = canvasRef.current
     if (!wrap || !canvas) return
     const setSize = () => {
-      const w = wrap.clientWidth
-      const h = wrap.clientHeight
+      const w = Math.max(1, wrap.clientWidth)
+      const h = Math.max(1, wrap.clientHeight)
       if (canvas.width !== w || canvas.height !== h) {
         canvas.width = w
         canvas.height = h
@@ -224,13 +277,16 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
       }
     }
     setSize()
-    const rafId = requestAnimationFrame(setSize)
+    const raf1 = requestAnimationFrame(() => {
+      setSize()
+      requestAnimationFrame(setSize)
+    })
     const ResizeObserverCtor = typeof window !== 'undefined' ? window.ResizeObserver : null
-    if (!ResizeObserverCtor) return () => cancelAnimationFrame(rafId)
+    if (!ResizeObserverCtor) return () => cancelAnimationFrame(raf1)
     const ro = new ResizeObserverCtor(setSize)
     ro.observe(wrap)
     return () => {
-      cancelAnimationFrame(rafId)
+      cancelAnimationFrame(raf1)
       ro.disconnect()
     }
   }, [])
@@ -242,7 +298,15 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     if (!state.bounds || state.bounds.width <= 0 || state.bounds.height <= 0) return
-    if (canvas.width === 0 || canvas.height === 0) return
+    if (canvas.width === 0 || canvas.height === 0) {
+      const wrap = wrapRef.current
+      if (wrap && wrap.clientWidth > 0 && wrap.clientHeight > 0) {
+        canvas.width = Math.max(1, wrap.clientWidth)
+        canvas.height = Math.max(1, wrap.clientHeight)
+        requestAnimationFrame(() => setResizeTick((t) => t + 1))
+      }
+      return
+    }
 
     const { snakes, pellets, bounds } = state
 
@@ -369,7 +433,6 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
         ctx.lineJoin = 'round'
         const bodyWidth = (BODY_RADIUS * 2) / scale
         const head = segs[0]
-        const tail = segs[segs.length - 1]
         ctx.save()
         ctx.shadowColor = snake.color
         ctx.shadowBlur = (snake.isPlayer ? 14 : 10) / scale
@@ -399,14 +462,14 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
         ctx.strokeStyle = 'rgba(0,0,0,0.2)'
         ctx.lineWidth = bodyWidth + 6 / scale
         ctx.stroke()
-        const grad = ctx.createLinearGradient(head.x, head.y, tail.x, tail.y)
-        grad.addColorStop(0, brightenColor(snake.color, 0.35))
-        grad.addColorStop(1, snake.color)
-        ctx.strokeStyle = grad
-        ctx.lineWidth = bodyWidth
-        ctx.beginPath()
-        strokeToroidalPath(ctx, segs, bounds)
-        ctx.stroke()
+        strokeToroidalPathWithGradient(
+          ctx,
+          segs,
+          bounds,
+          brightenColor(snake.color, 0.35),
+          snake.color,
+          bodyWidth,
+        )
         ctx.fillStyle = snake.color
         const headPositions =
           offset.x === 0 && offset.y === 0
@@ -507,8 +570,13 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
     if (!canvas || !onMouseMove) return
     const handleMove = (e) => {
       const { scale, camX, camY } = cameraRef.current
-      const worldX = (e.offsetX - camX) / scale
-      const worldY = (e.offsetY - camY) / scale
+      if (scale <= 0 || canvas.width <= 0 || canvas.height <= 0) return
+      const rect = canvas.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) return
+      const canvasX = ((e.clientX - rect.left) / rect.width) * canvas.width
+      const canvasY = ((e.clientY - rect.top) / rect.height) * canvas.height
+      const worldX = (canvasX - camX) / scale
+      const worldY = (canvasY - camY) / scale
       onMouseMove(worldX, worldY)
     }
     canvas.addEventListener('mousemove', handleMove)

@@ -145,11 +145,13 @@ export function SlitherPage() {
         let target
         if (faceEnabled && playerCVAngleRef.current != null) {
           target = normalizeAngle(playerCVAngleRef.current)
-        } else if (playerMouseWorld.current) {
-          target = Math.atan2(
-            playerMouseWorld.current.y - head.y,
-            playerMouseWorld.current.x - head.x,
-          )
+        } else if (!faceEnabled && playerMouseWorld.current) {
+          const b = current.bounds
+          const w = b?.width ?? 1
+          const h = b?.height ?? 1
+          const dx = playerMouseWorld.current.x - head.x - w * Math.round((playerMouseWorld.current.x - head.x) / w)
+          const dy = playerMouseWorld.current.y - head.y - h * Math.round((playerMouseWorld.current.y - head.y) / h)
+          target = Math.atan2(dy, dx)
           target = normalizeAngle(target)
         } else if (playerTurn.current !== 0) {
           target = normalizeAngle(
