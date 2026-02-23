@@ -6,10 +6,12 @@
 export const SEGMENT_SPACING = 8
 export const HEAD_RADIUS = 15
 export const BODY_RADIUS = 15
+/** Extra distance for death (collision with other snakes) so death feels readable. */
+export const DEATH_RADIUS_EXTRA = 12
 export const PELLET_RADIUS = 30
 /** Extra radius for pellet collection (magnet effect). */
 export const MAGNET_RADIUS = 100
-export const DEFAULT_SPEED = 600
+export const DEFAULT_SPEED = 1000
 /** Speed multiplier per segment over initial length (e.g. 0.006 = 0.6% per pellet). */
 export const SPEED_GROWTH_PER_SEGMENT = 0.006
 /** Max speed multiplier from growth (cap so long snakes don't go crazy). */
@@ -17,7 +19,7 @@ export const SPEED_GROWTH_CAP = 1.6
 export const TURN_SPEED = 6
 export const PELLET_VALUE = 2
 export const DEATH_PELLET_FRACTION = 0.4
-export const INITIAL_LENGTH = 30
+export const INITIAL_LENGTH = 80
 export const PELLET_SPAWN_INTERVAL = 2
 export const ARENA_PADDING = 40
 
@@ -216,12 +218,12 @@ function moveSnake(snake, dt, targetAngle, bounds) {
  * @returns {boolean}
  */
 function headHitsBody(snakeId, head, allSnakes, bounds) {
-  const r = HEAD_RADIUS + BODY_RADIUS
-  const rSq = r * r
+  const contactDist = HEAD_RADIUS + BODY_RADIUS + DEATH_RADIUS_EXTRA
+  const contactDistSq = contactDist * contactDist
   for (const snake of allSnakes) {
     if (snake.id === snakeId) continue
     for (let i = 0; i < snake.segments.length; i++) {
-      if (toroidalDistSq(head, snake.segments[i], bounds) < rSq) return true
+      if (toroidalDistSq(head, snake.segments[i], bounds) <= contactDistSq) return true
     }
   }
   return false

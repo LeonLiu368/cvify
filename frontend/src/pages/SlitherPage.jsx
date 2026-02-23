@@ -36,6 +36,7 @@ export function SlitherPage() {
   const [playerDeadSnake, setPlayerDeadSnake] = useState(null)
   const [deathAnimationProgress, setDeathAnimationProgress] = useState(null)
   const deathStartTimeRef = useRef(null)
+  const [botDeadSnakes, setBotDeadSnakes] = useState([])
   const [showWinOverlay, setShowWinOverlay] = useState(false)
   const [speedBoostEndTime, setSpeedBoostEndTime] = useState(null)
   const [speedBoostStartTime, setSpeedBoostStartTime] = useState(null)
@@ -201,6 +202,23 @@ export function SlitherPage() {
         setTimeout(() => setShowWinOverlay(true), 1000)
         return
       }
+      const tickTimeMs = performance.now()
+      const newBotDeads = deadIds
+        .filter((id) => id !== 'player')
+        .map((id) => {
+          const snake = current.snakes.find((s) => s.id === id)
+          return snake
+            ? {
+                snake: { ...snake, segments: snake.segments.map((p) => ({ ...p })) },
+                startTime: tickTimeMs,
+              }
+            : null
+        })
+        .filter(Boolean)
+      setBotDeadSnakes((prev) => [
+        ...prev.filter((b) => tickTimeMs - b.startTime < 1000),
+        ...newBotDeads,
+      ])
       stateRef.current = nextState
       setState(nextState)
       raf = requestAnimationFrame(loop)
@@ -253,6 +271,7 @@ export function SlitherPage() {
     setShowWinOverlay(false)
     setPlayerDeadSnake(null)
     setDeathAnimationProgress(null)
+    setBotDeadSnakes([])
     speedBoostEndTimeRef.current = null
     speedBoostStartTimeRef.current = null
     setSpeedBoostEndTime(null)
@@ -298,6 +317,7 @@ export function SlitherPage() {
           onMouseMove={handleMouseMove}
           playerDeadSnake={playerDeadSnake}
           deathAnimationProgress={deathAnimationProgress}
+          botDeadSnakes={botDeadSnakes}
           speedBoostActive={speedBoostActive}
           speedBoostProgress={speedBoostProgress}
         />
