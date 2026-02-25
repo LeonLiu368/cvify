@@ -23,12 +23,23 @@ export const INITIAL_LENGTH = 80
 export const PELLET_SPAWN_INTERVAL = 2
 export const ARENA_PADDING = 40
 
+/** Power-up pellet types. */
+export const POWERUP_TYPES = /** @type {const} */ (['shield', 'ghost', 'magnet'])
+/** Probability per spawn that a new pellet is a power-up (0–1). */
+export const POWERUP_SPAWN_CHANCE = 0.08
+/** Duration in seconds for ghost and magnet effects. */
+export const GHOST_DURATION = 4
+export const MAGNET_DURATION = 5
+/** Magnet radius multiplier when super-magnet power-up is active. */
+export const SUPER_MAGNET_MULTIPLIER = 2
+
 /**
  * @typedef {{ x: number, y: number }} Point
- * @typedef {{ id: string, segments: Point[], angle: number, speed: number, turnSpeed: number, color: string, isPlayer?: boolean }} Snake
- * @typedef {{ x: number, y: number, value: number }} Pellet
+ * @typedef {'normal' | 'shield' | 'ghost' | 'magnet'} PelletType
+ * @typedef {{ id: string, segments: Point[], angle: number, speed: number, turnSpeed: number, color: string, isPlayer?: boolean, shield?: boolean, ghostUntil?: number, magnetUntil?: number }} Snake
+ * @typedef {{ x: number, y: number, value: number, type?: PelletType }} Pellet
  * @typedef {{ width: number, height: number }} Bounds
- * @typedef {{ snakes: Snake[], pellets: Pellet[], bounds: Bounds, nextSnakeId: number, nextPelletSpawn: number }} GameState
+ * @typedef {{ snakes: Snake[], pellets: Pellet[], bounds: Bounds, nextSnakeId: number, nextPelletSpawn: number, gameTime?: number }} GameState
  */
 
 /**
@@ -99,6 +110,9 @@ export function createInitialState(options = {}) {
       turnSpeed: TURN_SPEED,
       color: isPlayer ? playerColor : colors[i % colors.length],
       isPlayer,
+      shield: false,
+      ghostUntil: 0,
+      magnetUntil: 0,
     })
   }
 
@@ -108,6 +122,7 @@ export function createInitialState(options = {}) {
       x: minX + Math.random() * (maxX - minX),
       y: minY + Math.random() * (maxY - minY),
       value: PELLET_VALUE,
+      type: 'normal',
     })
   }
 
@@ -117,6 +132,7 @@ export function createInitialState(options = {}) {
     bounds,
     nextSnakeId: numBots,
     nextPelletSpawn: PELLET_SPAWN_INTERVAL,
+    gameTime: 0,
   }
 }
 
@@ -211,17 +227,23 @@ function moveSnake(snake, dt, targetAngle, bounds) {
 
 /**
  * Check if head hits another snake's body (not own body). Uses toroidal distance.
+ * Skips collision if victim or body-owner has ghost active at gameTime.
  * @param {string} snakeId
  * @param {Point} head
  * @param {Snake[]} allSnakes
  * @param {Bounds} bounds
+ * @param {number} gameTime
  * @returns {boolean}
  */
-function headHitsBody(snakeId, head, allSnakes, bounds) {
+function headHitsBody(snakeId, head, allSnakes, bounds, gameTime) {
   const contactDist = HEAD_RADIUS + BODY_RADIUS + DEATH_RADIUS_EXTRA
   const contactDistSq = contactDist * contactDist
+  const victim = allSnakes.find((s) => s.id === snakeId)
+  const victimGhost = victim && (victim.ghostUntil ?? 0) > gameTime
   for (const snake of allSnakes) {
     if (snake.id === snakeId) continue
+    const ownerGhost = (snake.ghostUntil ?? 0) > gameTime
+    if (victimGhost || ownerGhost) continue
     for (let i = 0; i < snake.segments.length; i++) {
       if (toroidalDistSq(head, snake.segments[i], bounds) <= contactDistSq) return true
     }
@@ -240,6 +262,7 @@ function headHitsBody(snakeId, head, allSnakes, bounds) {
 export function tick(state, dt, targetAngles = {}, options = {}) {
   const { bounds } = state
   let { snakes, pellets } = state
+  const gameTime = (state.gameTime ?? 0) + dt
   const padding = ARENA_PADDING
   const minX = padding
   const maxX = bounds.width - padding
@@ -256,32 +279,62 @@ export function tick(state, dt, targetAngles = {}, options = {}) {
     return result
   })
 
-  const pelletCollectRadiusSq = (HEAD_RADIUS + PELLET_RADIUS + MAGNET_RADIUS) ** 2
+  const baseCollectRadius = HEAD_RADIUS + PELLET_RADIUS + MAGNET_RADIUS
+  const collectedIndices = new Set()
   snakes = snakes.map((snake) => {
     const head = snake.segments[0]
+    const hasMagnet = (snake.magnetUntil ?? 0) > gameTime
+    const collectRadius = hasMagnet ? baseCollectRadius * SUPER_MAGNET_MULTIPLIER : baseCollectRadius
+    const pelletCollectRadiusSq = collectRadius * collectRadius
     let lengthGain = 0
-    for (let i = pellets.length - 1; i >= 0; i--) {
-      if (toroidalDistSq(head, pellets[i], bounds) < pelletCollectRadiusSq) {
-        lengthGain += pellets[i].value
-        pellets = pellets.slice(0, i).concat(pellets.slice(i + 1))
+    let shield = snake.shield ?? false
+    let ghostUntil = snake.ghostUntil ?? 0
+    let magnetUntil = snake.magnetUntil ?? 0
+    for (let i = 0; i < pellets.length; i++) {
+      if (collectedIndices.has(i)) continue
+      if (toroidalDistSq(head, pellets[i], bounds) >= pelletCollectRadiusSq) continue
+      collectedIndices.add(i)
+      const pellet = pellets[i]
+      const ptype = pellet.type ?? 'normal'
+      if (ptype === 'shield') shield = true
+      else if (ptype === 'ghost') ghostUntil = gameTime + GHOST_DURATION
+      else if (ptype === 'magnet') magnetUntil = gameTime + MAGNET_DURATION
+      else lengthGain += pellet.value
+    }
+    const needsUpdate =
+      lengthGain > 0 ||
+      shield !== (snake.shield ?? false) ||
+      ghostUntil !== (snake.ghostUntil ?? 0) ||
+      magnetUntil !== (snake.magnetUntil ?? 0)
+    if (!needsUpdate) return snake
+    let nextSnake = { ...snake, shield, ghostUntil, magnetUntil }
+    if (lengthGain > 0) {
+      const tail = nextSnake.segments[nextSnake.segments.length - 1]
+      const newSegments = [...nextSnake.segments]
+      for (let g = 0; g < lengthGain; g++) {
+        newSegments.push({ ...tail })
       }
+      nextSnake = { ...nextSnake, segments: newSegments }
     }
-    if (lengthGain <= 0) return snake
-    const tail = snake.segments[snake.segments.length - 1]
-    const newSegments = [...snake.segments]
-    for (let g = 0; g < lengthGain; g++) {
-      newSegments.push({ ...tail })
-    }
-    return { ...snake, segments: newSegments }
+    return nextSnake
   })
+  pellets = pellets.filter((_, i) => !collectedIndices.has(i))
 
   const deadIds = new Set()
   for (const snake of snakes) {
     const head = snake.segments[0]
-    if (headHitsBody(snake.id, head, snakes, bounds)) {
+    if (headHitsBody(snake.id, head, snakes, bounds, gameTime)) {
       deadIds.add(snake.id)
     }
   }
+
+  snakes = snakes.map((s) => {
+    if (deadIds.has(s.id) && (s.shield === true)) {
+      deadIds.delete(s.id)
+      return { ...s, shield: false }
+    }
+    return s
+  })
 
   snakes = snakes.filter((s) => !deadIds.has(s.id))
 
@@ -297,6 +350,7 @@ export function tick(state, dt, targetAngles = {}, options = {}) {
         x: seg.x,
         y: seg.y,
         value: PELLET_VALUE,
+        type: 'normal',
       })
     }
   }
@@ -305,10 +359,13 @@ export function tick(state, dt, targetAngles = {}, options = {}) {
   nextPelletSpawn -= dt
   if (nextPelletSpawn <= 0) {
     nextPelletSpawn = PELLET_SPAWN_INTERVAL
+    const isPowerUp = Math.random() < POWERUP_SPAWN_CHANCE
+    const type = isPowerUp ? POWERUP_TYPES[Math.floor(Math.random() * POWERUP_TYPES.length)] : 'normal'
     pellets.push({
       x: minX + Math.random() * (maxX - minX),
       y: minY + Math.random() * (maxY - minY),
-      value: PELLET_VALUE,
+      value: type === 'normal' ? PELLET_VALUE : 1,
+      type,
     })
   }
 
@@ -318,6 +375,7 @@ export function tick(state, dt, targetAngles = {}, options = {}) {
       snakes,
       pellets,
       nextPelletSpawn,
+      gameTime,
     },
     deadIds: [...deadIds],
   }

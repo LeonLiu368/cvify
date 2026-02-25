@@ -20,6 +20,37 @@ const T_MAX = 1 + 1e-6
 
 const ORB_GLOW_BLUR = 12
 const ORB_HIGHLIGHT_OFFSET = 0.35
+
+/** Power-up pellet appearance: shadow color and gradient stops (center to edge). */
+const POWERUP_STYLE = {
+  shield: {
+    shadowColor: 'rgba(100, 180, 255, 0.95)',
+    gradient: [
+      [0, 'rgba(255, 255, 255, 1)'],
+      [0.25, 'rgba(180, 220, 255, 1)'],
+      [0.6, 'rgba(80, 160, 255, 1)'],
+      [1, 'rgba(40, 100, 200, 1)'],
+    ],
+  },
+  ghost: {
+    shadowColor: 'rgba(200, 180, 255, 0.95)',
+    gradient: [
+      [0, 'rgba(255, 255, 255, 1)'],
+      [0.3, 'rgba(230, 210, 255, 1)'],
+      [0.7, 'rgba(160, 120, 220, 1)'],
+      [1, 'rgba(100, 60, 180, 1)'],
+    ],
+  },
+  magnet: {
+    shadowColor: 'rgba(255, 200, 80, 0.95)',
+    gradient: [
+      [0, 'rgba(255, 255, 255, 1)'],
+      [0.2, 'rgba(255, 240, 180, 1)'],
+      [0.5, 'rgba(255, 200, 60, 1)'],
+      [1, 'rgba(220, 140, 20, 1)'],
+    ],
+  },
+}
 const ORB_SPECULAR_OFFSET = 0.15
 const ORB_SPECULAR_RADIUS = 0.28
 const HEAD_EYE_OFFSET = HEAD_RADIUS * 0.17
@@ -197,14 +228,20 @@ function* toroidalDrawPositions(px, py, bounds) {
 const MINIMAP_SIZE = 140
 const MINIMAP_MARGIN = 4
 
-/** Draw a snake with death animation (shrink + fade). */
+/** Ease-out cubic for snappy start and smooth end. */
+function easeOutCubic(t) {
+  return 1 - (1 - t) ** 3
+}
+
+/** Draw a snake with death animation (eased shrink + fade + head burst). */
 function drawDeathAnimation(ctx, snake, progress, bounds, scale, offset) {
   const segs = snake.segments
   if (segs.length < 2) return
+  const eased = easeOutCubic(progress)
   const head = segs[0]
-  const s = Math.max(0.01, 1 - 0.5 * progress)
+  const s = Math.max(0.01, 1 - 0.5 * eased)
   ctx.save()
-  ctx.globalAlpha = 1 - progress
+  ctx.globalAlpha = 1 - eased
   ctx.translate(head.x, head.y)
   ctx.scale(s, s)
   ctx.translate(-head.x, -head.y)
@@ -239,6 +276,22 @@ function drawDeathAnimation(ctx, snake, progress, bounds, scale, offset) {
     ctx.fillStyle = snake.color
   }
   ctx.restore()
+
+  if (progress < 0.4) {
+    const burstAlpha = 1 - progress / 0.4
+    const burstRadius = HEAD_RADIUS * (1 + progress * 3)
+    const burstColor = brightenColor(snake.color, 0.6)
+    ctx.save()
+    ctx.globalAlpha = burstAlpha
+    ctx.strokeStyle = burstColor
+    ctx.lineWidth = (4 / scale)
+    for (const [hx, hy] of headPositions) {
+      ctx.beginPath()
+      ctx.arc(hx, hy, burstRadius, 0, Math.PI * 2)
+      ctx.stroke()
+    }
+    ctx.restore()
+  }
 }
 
 /** Unwrap focus so camera moves continuously when head crosses boundary (no jump). */
@@ -255,7 +308,7 @@ function unwrapFocus(focus, prev, w, h) {
   return { x, y }
 }
 
-export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimationProgress, botDeadSnakes = [], speedBoostActive, speedBoostProgress }) {
+export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimationProgress, botDeadSnakes = [], deathAnimMs = 1200, speedBoostActive, speedBoostProgress }) {
   const canvasRef = useRef(null)
   const minimapRef = useRef(null)
   const wrapRef = useRef(null)
@@ -388,26 +441,40 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
           offset.x === 0 && offset.y === 0
             ? toroidalDrawPositions(pellet.x, pellet.y, bounds)
             : [[pellet.x, pellet.y]]
+        const ptype = pellet.type ?? 'normal'
+        const isPowerUp = ptype === 'shield' || ptype === 'ghost' || ptype === 'magnet'
+        const powerUpStyle = isPowerUp ? POWERUP_STYLE[ptype] : null
+        const sizeScale = isPowerUp ? 1.25 : 1
         const usePull = offset.x === 0 && offset.y === 0
         for (const [px, py] of positions) {
           const drawX = usePull ? px + pullX : px
           const drawY = usePull ? py + pullY : py
-          const r = PELLET_RADIUS * pelletPulse * sizeMult
+          const r = PELLET_RADIUS * sizeScale * pelletPulse * sizeMult
           const highlightOffset = r * ORB_HIGHLIGHT_OFFSET
           const cx = drawX - highlightOffset
           const cy = drawY - highlightOffset
           ctx.save()
           ctx.globalAlpha = alpha
-          ctx.shadowColor = 'rgba(255, 100, 0, 0.9)'
-          ctx.shadowBlur = (ORB_GLOW_BLUR * valueMult * sizeMult) / scale
-          const orbGrad = ctx.createRadialGradient(cx, cy, 0, drawX, drawY, r)
-          orbGrad.addColorStop(0, 'rgba(255, 255, 255, 1)')
-          orbGrad.addColorStop(0.2, 'rgba(255, 255, 120, 1)')
-          orbGrad.addColorStop(0.45, 'rgba(255, 220, 60, 1)')
-          orbGrad.addColorStop(0.7, 'rgba(255, 160, 40, 1)')
-          orbGrad.addColorStop(0.9, 'rgba(255, 100, 80, 1)')
-          orbGrad.addColorStop(1, 'rgba(220, 60, 100, 1)')
-          ctx.fillStyle = orbGrad
+          if (powerUpStyle) {
+            ctx.shadowColor = powerUpStyle.shadowColor
+            ctx.shadowBlur = (ORB_GLOW_BLUR * 1.3 * sizeMult) / scale
+            const orbGrad = ctx.createRadialGradient(cx, cy, 0, drawX, drawY, r)
+            for (const [pos, color] of powerUpStyle.gradient) {
+              orbGrad.addColorStop(pos, color)
+            }
+            ctx.fillStyle = orbGrad
+          } else {
+            ctx.shadowColor = 'rgba(255, 100, 0, 0.9)'
+            ctx.shadowBlur = (ORB_GLOW_BLUR * valueMult * sizeMult) / scale
+            const orbGrad = ctx.createRadialGradient(cx, cy, 0, drawX, drawY, r)
+            orbGrad.addColorStop(0, 'rgba(255, 255, 255, 1)')
+            orbGrad.addColorStop(0.2, 'rgba(255, 255, 120, 1)')
+            orbGrad.addColorStop(0.45, 'rgba(255, 220, 60, 1)')
+            orbGrad.addColorStop(0.7, 'rgba(255, 160, 40, 1)')
+            orbGrad.addColorStop(0.9, 'rgba(255, 100, 80, 1)')
+            orbGrad.addColorStop(1, 'rgba(220, 60, 100, 1)')
+            ctx.fillStyle = orbGrad
+          }
           ctx.beginPath()
           ctx.arc(drawX, drawY, r, 0, Math.PI * 2)
           ctx.fill()
@@ -415,7 +482,7 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
           ctx.beginPath()
           ctx.arc(cx - r * ORB_SPECULAR_OFFSET, cy - r * ORB_SPECULAR_OFFSET, r * ORB_SPECULAR_RADIUS, 0, Math.PI * 2)
           ctx.fill()
-          ctx.strokeStyle = 'rgba(255, 200, 120, 0.6)'
+          ctx.strokeStyle = isPowerUp ? 'rgba(255, 255, 255, 0.7)' : 'rgba(255, 200, 120, 0.6)'
           ctx.lineWidth = 1 / scale
           ctx.beginPath()
           ctx.arc(drawX, drawY, r, 0, Math.PI * 2)
@@ -499,7 +566,7 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
       }
       const now = performance.now()
       for (const { snake, startTime } of botDeadSnakes) {
-        const progress = Math.min(1, (now - startTime) / 1000)
+        const progress = Math.min(1, (now - startTime) / deathAnimMs)
         if (progress < 1) {
           drawDeathAnimation(ctx, snake, progress, bounds, scale, offset)
         }
@@ -563,7 +630,7 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
       mCtx.lineWidth = 1
       mCtx.strokeRect(vx, vy, vw * mScale, vh * mScale)
     }
-  }, [state, state?.bounds, resizeTick, playerDeadSnake, deathAnimationProgress, botDeadSnakes, speedBoostActive, speedBoostProgress])
+  }, [state, state?.bounds, resizeTick, playerDeadSnake, deathAnimationProgress, botDeadSnakes, deathAnimMs, speedBoostActive, speedBoostProgress])
 
   useEffect(() => {
     const canvas = canvasRef.current

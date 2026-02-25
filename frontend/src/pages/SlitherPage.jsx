@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { createInitialState, tick, getSnakeLength } from '../slither/slitherLogic.js'
+import { createInitialState, tick, getSnakeLength, GHOST_DURATION, MAGNET_DURATION } from '../slither/slitherLogic.js'
 import { computeTargetAngles } from '../slither/botAI.js'
 import { SlitherView } from '../slither/SlitherView.jsx'
 import { useHeadTracking } from '../useHeadTracking.js'
@@ -8,6 +8,7 @@ import { ResizableCameraPanel } from '../components/ResizableCameraPanel.jsx'
 
 const FIXED_DT = 1 / 60
 const PLAYER_TURN_RATE = 3
+const DEATH_ANIM_MS = 1200
 const BOOST_BASE_DURATION_MS = 2000
 const BOOST_DURATION_PER_SCORE_MS = 50
 const BOOST_SPEED_MULTIPLIER = 1.5
@@ -218,7 +219,7 @@ export function SlitherPage() {
         })
         .filter(Boolean)
       setBotDeadSnakes((prev) => [
-        ...prev.filter((b) => tickTimeMs - b.startTime < 1000),
+        ...prev.filter((b) => tickTimeMs - b.startTime < DEATH_ANIM_MS),
         ...newBotDeads,
       ])
       stateRef.current = nextState
@@ -235,7 +236,7 @@ export function SlitherPage() {
     const start = deathStartTimeRef.current ?? performance.now()
     const animate = () => {
       const elapsed = performance.now() - start
-      const progress = Math.min(1, elapsed / 1000)
+      const progress = Math.min(1, elapsed / DEATH_ANIM_MS)
       setDeathAnimationProgress(progress)
       if (progress >= 1) {
         setGameOver(true)
@@ -320,6 +321,7 @@ export function SlitherPage() {
           playerDeadSnake={playerDeadSnake}
           deathAnimationProgress={deathAnimationProgress}
           botDeadSnakes={botDeadSnakes}
+          deathAnimMs={DEATH_ANIM_MS}
           speedBoostActive={speedBoostActive}
           speedBoostProgress={speedBoostProgress}
         />
@@ -375,6 +377,82 @@ export function SlitherPage() {
               ? `Speed boost: ${cooldownRemainingSec}s`
               : 'Speed boost: Ready'}
           </p>
+          {(() => {
+            const playerSnake = state.snakes.find((s) => s.isPlayer)
+            const gameTime = state.gameTime ?? 0
+            const shield = playerSnake?.shield === true
+            const ghostRemain = (playerSnake?.ghostUntil ?? 0) - gameTime
+            const magnetRemain = (playerSnake?.magnetUntil ?? 0) - gameTime
+            const hasPowerUps = shield || ghostRemain > 0 || magnetRemain > 0
+            if (!hasPowerUps) return null
+            const iconSize = 18
+            return (
+              <div className="slither-powerups-section" aria-label="Active power-ups">
+                <h3 className="slither-powerups-title">Power-ups</h3>
+                <div className="slither-powerups">
+                  {shield ? (
+                    <span className="slither-powerup slither-powerup-shield">
+                      <svg className="slither-powerup-icon" width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                      </svg>
+                      <span>Shield</span>
+                    </span>
+                  ) : null}
+                  {ghostRemain > 0 ? (
+                    <span className="slither-powerup slither-powerup-ghost">
+                      <span className="slither-powerup-timer-wrap">
+                        <svg className="slither-powerup-ring" viewBox="0 0 24 24" aria-hidden>
+                          <circle className="slither-powerup-ring-bg" cx="12" cy="12" r="10" fill="none" strokeWidth="2" />
+                          <circle
+                            className="slither-powerup-ring-fill"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            fill="none"
+                            strokeWidth="2"
+                            strokeDasharray={2 * Math.PI * 10}
+                            strokeDashoffset={2 * Math.PI * 10 * (1 - ghostRemain / GHOST_DURATION)}
+                            transform="rotate(-90 12 12)"
+                          />
+                        </svg>
+                        <svg className="slither-powerup-icon" width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                          <path d="M12 2C9 2 6 4 6 8v6c0 2 1.5 3 2 4 .5 1 2 2 4 2s3.5-1 4-2c.5-1 2-2 2-4V8c0-4-3-6-6-6zm0 2c2 0 4 1.5 4 4v6c0 .5-.2 1-.5 1.5-.5.8-1.5 1.5-3 1.5s-2.5-.7-3-1.5C9.2 15 9 14.5 9 14V8c0-2.5 2-4 4-4zM8 18c.5 1 2 2 4 2s3.5-1 4-2c.3-.5.5-1 .5-1.5 0-.5-.2-1-.5-1.5l.5-.5c.6.6.5 1.5.5 2 0 1-.5 2-2 3s-3 1-4 0c-1-.5-2-1.5-2-3 0-.5.1-1.4.5-2l.5.5c-.3.5-.5 1-.5 1.5 0 .5.2 1 .5 1.5z" />
+                        </svg>
+                      </span>
+                      <span>Ghost {ghostRemain.toFixed(1)}s</span>
+                    </span>
+                  ) : null}
+                  {magnetRemain > 0 ? (
+                    <span className="slither-powerup slither-powerup-magnet">
+                      <span className="slither-powerup-timer-wrap">
+                        <svg className="slither-powerup-ring" viewBox="0 0 24 24" aria-hidden>
+                          <circle className="slither-powerup-ring-bg" cx="12" cy="12" r="10" fill="none" strokeWidth="2" />
+                          <circle
+                            className="slither-powerup-ring-fill"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            fill="none"
+                            strokeWidth="2"
+                            strokeDasharray={2 * Math.PI * 10}
+                            strokeDashoffset={2 * Math.PI * 10 * (1 - magnetRemain / MAGNET_DURATION)}
+                            transform="rotate(-90 12 12)"
+                          />
+                        </svg>
+                        <svg className="slither-powerup-icon" width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                          <path d="M6 2v6c0 3 2 5 6 5s6-2 6-5V2" />
+                          <path d="M6 8V2H4a2 2 0 0 0-2 2v4h4z" />
+                          <path d="M18 8V2h2a2 2 0 0 1 2 2v4h-4z" />
+                          <path d="M12 11v11" />
+                        </svg>
+                      </span>
+                      <span>Magnet {magnetRemain.toFixed(1)}s</span>
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            )
+          })()}
           <ol className="slither-leaderboard-list">
             {leaderboard.map((snake, i) => (
               <li
