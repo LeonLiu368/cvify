@@ -26,7 +26,7 @@ export const ARENA_PADDING = 40
 /** Power-up pellet types. */
 export const POWERUP_TYPES = /** @type {const} */ (['shield', 'ghost', 'magnet'])
 /** Probability per spawn that a new pellet is a power-up (0–1). */
-export const POWERUP_SPAWN_CHANCE = 0.08
+export const POWERUP_SPAWN_CHANCE = 0.16
 /** Duration in seconds for ghost and magnet effects. */
 export const GHOST_DURATION = 4
 export const MAGNET_DURATION = 5

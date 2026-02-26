@@ -385,22 +385,25 @@ export function SlitherPage() {
             const magnetRemain = (playerSnake?.magnetUntil ?? 0) - gameTime
             const hasPowerUps = shield || ghostRemain > 0 || magnetRemain > 0
             if (!hasPowerUps) return null
-            const iconSize = 18
+            const iconSize = 22
+            const ringSize = 26
             return (
               <div className="slither-powerups-section" aria-label="Active power-ups">
                 <h3 className="slither-powerups-title">Power-ups</h3>
                 <div className="slither-powerups">
                   {shield ? (
                     <span className="slither-powerup slither-powerup-shield">
-                      <svg className="slither-powerup-icon" width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                      </svg>
-                      <span>Shield</span>
+                      <span className="slither-powerup-symbol" aria-hidden>
+                        <svg className="slither-powerup-icon" width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                        </svg>
+                      </span>
+                      <span className="slither-powerup-label">Shield</span>
                     </span>
                   ) : null}
                   {ghostRemain > 0 ? (
                     <span className="slither-powerup slither-powerup-ghost">
-                      <span className="slither-powerup-timer-wrap">
+                      <span className="slither-powerup-timer-wrap" style={{ width: ringSize, height: ringSize }}>
                         <svg className="slither-powerup-ring" viewBox="0 0 24 24" aria-hidden>
                           <circle className="slither-powerup-ring-bg" cx="12" cy="12" r="10" fill="none" strokeWidth="2" />
                           <circle
@@ -415,16 +418,18 @@ export function SlitherPage() {
                             transform="rotate(-90 12 12)"
                           />
                         </svg>
-                        <svg className="slither-powerup-icon" width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                          <path d="M12 2C9 2 6 4 6 8v6c0 2 1.5 3 2 4 .5 1 2 2 4 2s3.5-1 4-2c.5-1 2-2 2-4V8c0-4-3-6-6-6zm0 2c2 0 4 1.5 4 4v6c0 .5-.2 1-.5 1.5-.5.8-1.5 1.5-3 1.5s-2.5-.7-3-1.5C9.2 15 9 14.5 9 14V8c0-2.5 2-4 4-4zM8 18c.5 1 2 2 4 2s3.5-1 4-2c.3-.5.5-1 .5-1.5 0-.5-.2-1-.5-1.5l.5-.5c.6.6.5 1.5.5 2 0 1-.5 2-2 3s-3 1-4 0c-1-.5-2-1.5-2-3 0-.5.1-1.4.5-2l.5.5c-.3.5-.5 1-.5 1.5 0 .5.2 1 .5 1.5z" />
+                        <svg className="slither-powerup-icon slither-powerup-icon-ghost" width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                          <path d="M12 3c-4 0-7 2.5-7 6.5v9l2.5-2 2.5 2 2.5-2 2.5 2v-9C17 5.5 16 3 12 3z" />
+                          <circle className="slither-powerup-ghost-eye" cx="9" cy="10" r="1.5" />
+                          <circle className="slither-powerup-ghost-eye" cx="15" cy="10" r="1.5" />
                         </svg>
                       </span>
-                      <span>Ghost {ghostRemain.toFixed(1)}s</span>
+                      <span className="slither-powerup-label">Ghost {ghostRemain.toFixed(1)}s</span>
                     </span>
                   ) : null}
                   {magnetRemain > 0 ? (
                     <span className="slither-powerup slither-powerup-magnet">
-                      <span className="slither-powerup-timer-wrap">
+                      <span className="slither-powerup-timer-wrap" style={{ width: ringSize, height: ringSize }}>
                         <svg className="slither-powerup-ring" viewBox="0 0 24 24" aria-hidden>
                           <circle className="slither-powerup-ring-bg" cx="12" cy="12" r="10" fill="none" strokeWidth="2" />
                           <circle
@@ -440,13 +445,13 @@ export function SlitherPage() {
                           />
                         </svg>
                         <svg className="slither-powerup-icon" width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                          <path d="M6 2v6c0 3 2 5 6 5s6-2 6-5V2" />
-                          <path d="M6 8V2H4a2 2 0 0 0-2 2v4h4z" />
-                          <path d="M18 8V2h2a2 2 0 0 1 2 2v4h-4z" />
-                          <path d="M12 11v11" />
+                          <path d="M5 4v8c0 3 3 4 7 4s7-1 7-4V4" />
+                          <path d="M5 4h3v4H5V4z" />
+                          <path d="M16 4h3v4h-3V4z" />
+                          <line x1="12" y1="12" x2="12" y2="20" />
                         </svg>
                       </span>
-                      <span>Magnet {magnetRemain.toFixed(1)}s</span>
+                      <span className="slither-powerup-label">Magnet {magnetRemain.toFixed(1)}s</span>
                     </span>
                   ) : null}
                 </div>
