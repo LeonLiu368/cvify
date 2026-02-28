@@ -1,16 +1,34 @@
 import { useEffect, useRef, useState } from 'react'
 import { PELLET_RADIUS, HEAD_RADIUS, BODY_RADIUS, MAGNET_RADIUS, toroidalDistSq } from './slitherLogic.js'
 
-/** Mix hex color with white; amount 0 = original, 1 = white. */
-function brightenColor(hex, amount) {
-  const n = parseInt(hex.slice(1), 16)
-  const r = (n >> 16) & 0xff
-  const g = (n >> 8) & 0xff
-  const b = n & 0xff
+/** Parse color to [r,g,b]; accepts #hex or rgb(r,g,b). */
+function parseColorToRgb(c) {
+  if (c.startsWith('rgb')) {
+    const match = c.match(/\d+/g)
+    return match ? match.slice(0, 3).map(Number) : [255, 255, 255]
+  }
+  const n = parseInt(c.replace('#', ''), 16)
+  return [(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff]
+}
+
+/** Mix color with white; amount 0 = original, 1 = white. Accepts #hex or rgb(). */
+function brightenColor(hexOrRgb, amount) {
+  const [r, g, b] = parseColorToRgb(hexOrRgb)
   const r2 = Math.round(r + (255 - r) * amount)
   const g2 = Math.round(g + (255 - g) * amount)
   const b2 = Math.round(b + (255 - b) * amount)
   return `rgb(${r2},${g2},${b2})`
+}
+
+const GHOST_TINT = '#c4a8f0'
+/** Blend hex color with ghost tint; factor 0 = original, 1 = ghost. */
+function blendWithGhost(hex, factor = 0.55) {
+  const n = parseInt(hex.replace('#', ''), 16)
+  const m = parseInt(GHOST_TINT.replace('#', ''), 16)
+  const r = Math.round(((n >> 16) & 0xff) + (((m >> 16) & 0xff) - ((n >> 16) & 0xff)) * factor)
+  const g = Math.round(((n >> 8) & 0xff) + (((m >> 8) & 0xff) - ((n >> 8) & 0xff)) * factor)
+  const b_ = Math.round((n & 0xff) + ((m & 0xff) - (n & 0xff)) * factor)
+  return `rgb(${r},${g},${b_})`
 }
 
 const EPS = 1e-6
@@ -417,19 +435,29 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
       ctx.translate(offset.x, offset.y)
 
       const collectRadius = HEAD_RADIUS + PELLET_RADIUS + MAGNET_RADIUS
-      const magnetPull = 0.3
+      const magnetPull = 0.42
       const magnetShrink = 0.5
       const magnetFade = 0.35
       for (const pellet of pellets) {
-        const distSq = toroidalDistSq(focus, pellet, bounds)
+        let nearestHead = focus
+        let distSq = toroidalDistSq(focus, pellet, bounds)
+        for (const snake of snakes) {
+          const head = snake.segments[0]
+          if (!head) continue
+          const d2 = toroidalDistSq(head, pellet, bounds)
+          if (d2 < distSq) {
+            distSq = d2
+            nearestHead = head
+          }
+        }
         const dist = Math.sqrt(distSq)
         const t = Math.max(0, 1 - dist / collectRadius)
         const absorption = t * t * (3 - 2 * t)
         let pullX = 0
         let pullY = 0
         if (absorption > 0) {
-          pullX = (focus.x - pellet.x) - w * Math.round((focus.x - pellet.x) / w)
-          pullY = (focus.y - pellet.y) - h * Math.round((focus.y - pellet.y) / h)
+          pullX = (nearestHead.x - pellet.x) - w * Math.round((nearestHead.x - pellet.x) / w)
+          pullY = (nearestHead.y - pellet.y) - h * Math.round((nearestHead.y - pellet.y) / h)
           const pull = absorption * magnetPull
           pullX *= pull
           pullY *= pull
@@ -493,17 +521,23 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
       ctx.shadowColor = 'transparent'
       ctx.shadowBlur = 0
 
+      const gameTime = state.gameTime ?? 0
       for (const snake of snakes) {
         const segs = snake.segments
         if (segs.length < 2) continue
+        const ghostUntil = snake.ghostUntil ?? 0
+        const isGhost = ghostUntil > gameTime
+        const snakeColor = isGhost ? blendWithGhost(snake.color) : snake.color
+        if (isGhost) ctx.save()
+        if (isGhost) ctx.globalAlpha = 0.62
         ctx.lineCap = 'round'
         ctx.lineJoin = 'round'
         const bodyWidth = (BODY_RADIUS * 2) / scale
         const head = segs[0]
         ctx.save()
-        ctx.shadowColor = snake.color
+        ctx.shadowColor = snakeColor
         ctx.shadowBlur = (snake.isPlayer ? 14 : 10) / scale
-        ctx.strokeStyle = snake.color
+        ctx.strokeStyle = snakeColor
         ctx.globalAlpha = snake.isPlayer ? 0.4 : 0.35
         ctx.lineWidth = bodyWidth + 4 / scale
         ctx.beginPath()
@@ -516,9 +550,9 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
         if (isPlayerBoost) {
           const pulse = 0.5 + 0.5 * Math.sin(speedBoostProgress * Math.PI * 6)
           ctx.save()
-          ctx.shadowColor = snake.color
+          ctx.shadowColor = snakeColor
           ctx.shadowBlur = (12 + pulse * 8) / scale
-          ctx.strokeStyle = snake.color
+          ctx.strokeStyle = snakeColor
           ctx.lineWidth = bodyWidth + 10 / scale
           ctx.globalAlpha = 0.25 + pulse * 0.15
           ctx.stroke()
@@ -533,11 +567,11 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
           ctx,
           segs,
           bounds,
-          brightenColor(snake.color, 0.35),
-          snake.color,
+          brightenColor(snakeColor, 0.35),
+          snakeColor,
           bodyWidth,
         )
-        ctx.fillStyle = snake.color
+        ctx.fillStyle = snakeColor
         const headPositions =
           offset.x === 0 && offset.y === 0
             ? toroidalDrawPositions(head.x, head.y, bounds)
@@ -557,8 +591,9 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
           ctx.beginPath()
           ctx.arc(hx + HEAD_SPECULAR_OFFSET, hy + HEAD_SPECULAR_OFFSET, HEAD_SPECULAR_RADIUS, 0, Math.PI * 2)
           ctx.fill()
-          ctx.fillStyle = snake.color
+          ctx.fillStyle = snakeColor
         }
+        if (isGhost) ctx.restore()
       }
 
       if (playerDeadSnake && deathAnimationProgress != null && deathAnimationProgress < 1) {

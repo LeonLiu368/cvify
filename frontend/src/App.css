@@ -439,10 +439,6 @@ body {
   flex-shrink: 0;
 }
 
-.slither-powerup-ghost-eye {
-  fill: #0d0d0d;
-}
-
 .slither-powerup-label {
   font-weight: 600;
   letter-spacing: 0.02em;

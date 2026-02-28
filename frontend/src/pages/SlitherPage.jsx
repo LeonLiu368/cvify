@@ -5,6 +5,9 @@ import { computeTargetAngles } from '../slither/botAI.js'
 import { SlitherView } from '../slither/SlitherView.jsx'
 import { useHeadTracking } from '../useHeadTracking.js'
 import { ResizableCameraPanel } from '../components/ResizableCameraPanel.jsx'
+import shieldPowerupIcon from '../assets/powerups/shield.svg'
+import ghostPowerupIcon from '../assets/powerups/ghost.svg'
+import magnetPowerupIcon from '../assets/powerups/magnet.svg'
 
 const FIXED_DT = 1 / 60
 const PLAYER_TURN_RATE = 3
@@ -394,9 +397,7 @@ export function SlitherPage() {
                   {shield ? (
                     <span className="slither-powerup slither-powerup-shield">
                       <span className="slither-powerup-symbol" aria-hidden>
-                        <svg className="slither-powerup-icon" width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                        </svg>
+                        <img src={shieldPowerupIcon} alt="" className="slither-powerup-icon" width={iconSize} height={iconSize} />
                       </span>
                       <span className="slither-powerup-label">Shield</span>
                     </span>
@@ -418,11 +419,7 @@ export function SlitherPage() {
                             transform="rotate(-90 12 12)"
                           />
                         </svg>
-                        <svg className="slither-powerup-icon slither-powerup-icon-ghost" width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                          <path d="M12 3c-4 0-7 2.5-7 6.5v9l2.5-2 2.5 2 2.5-2 2.5 2v-9C17 5.5 16 3 12 3z" />
-                          <circle className="slither-powerup-ghost-eye" cx="9" cy="10" r="1.5" />
-                          <circle className="slither-powerup-ghost-eye" cx="15" cy="10" r="1.5" />
-                        </svg>
+                        <img src={ghostPowerupIcon} alt="" className="slither-powerup-icon" width={iconSize} height={iconSize} />
                       </span>
                       <span className="slither-powerup-label">Ghost {ghostRemain.toFixed(1)}s</span>
                     </span>
@@ -444,12 +441,7 @@ export function SlitherPage() {
                             transform="rotate(-90 12 12)"
                           />
                         </svg>
-                        <svg className="slither-powerup-icon" width={iconSize} height={iconSize} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                          <path d="M5 4v8c0 3 3 4 7 4s7-1 7-4V4" />
-                          <path d="M5 4h3v4H5V4z" />
-                          <path d="M16 4h3v4h-3V4z" />
-                          <line x1="12" y1="12" x2="12" y2="20" />
-                        </svg>
+                        <img src={magnetPowerupIcon} alt="" className="slither-powerup-icon" width={iconSize} height={iconSize} />
                       </span>
                       <span className="slither-powerup-label">Magnet {magnetRemain.toFixed(1)}s</span>
                     </span>
