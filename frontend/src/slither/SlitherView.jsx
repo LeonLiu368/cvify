@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { PELLET_RADIUS, HEAD_RADIUS, BODY_RADIUS, MAGNET_RADIUS, toroidalDistSq } from './slitherLogic.js'
+import shieldPowerupIcon from '../assets/powerups/shield.svg'
+import ghostPowerupIcon from '../assets/powerups/ghost.svg'
+import magnetPowerupIcon from '../assets/powerups/magnet.svg'
 
 /** Parse color to [r,g,b]; accepts #hex or rgb(r,g,b). */
 function parseColorToRgb(c) {
@@ -39,10 +42,11 @@ const T_MAX = 1 + 1e-6
 const ORB_GLOW_BLUR = 12
 const ORB_HIGHLIGHT_OFFSET = 0.35
 
-/** Power-up pellet appearance: shadow color and gradient stops (center to edge). */
+/** Power-up pellet appearance: shadow color, fill color for map icons, and gradient stops. */
 const POWERUP_STYLE = {
   shield: {
     shadowColor: 'rgba(100, 180, 255, 0.95)',
+    iconColor: '#5090ff',
     gradient: [
       [0, 'rgba(255, 255, 255, 1)'],
       [0.25, 'rgba(180, 220, 255, 1)'],
@@ -52,6 +56,7 @@ const POWERUP_STYLE = {
   },
   ghost: {
     shadowColor: 'rgba(200, 180, 255, 0.95)',
+    iconColor: '#a078dc',
     gradient: [
       [0, 'rgba(255, 255, 255, 1)'],
       [0.3, 'rgba(230, 210, 255, 1)'],
@@ -61,6 +66,7 @@ const POWERUP_STYLE = {
   },
   magnet: {
     shadowColor: 'rgba(255, 200, 80, 0.95)',
+    iconColor: '#e8b030',
     gradient: [
       [0, 'rgba(255, 255, 255, 1)'],
       [0.2, 'rgba(255, 240, 180, 1)'],
@@ -326,6 +332,8 @@ function unwrapFocus(focus, prev, w, h) {
   return { x, y }
 }
 
+const POWERUP_ICON_URLS = { shield: shieldPowerupIcon, ghost: ghostPowerupIcon, magnet: magnetPowerupIcon }
+
 export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimationProgress, botDeadSnakes = [], deathAnimMs = 1200, speedBoostActive, speedBoostProgress }) {
   const canvasRef = useRef(null)
   const minimapRef = useRef(null)
@@ -333,6 +341,27 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
   const cameraRef = useRef({ scale: 1, camX: 0, camY: 0 })
   const cameraWorldRef = useRef(null)
   const [resizeTick, setResizeTick] = useState(0)
+  const powerupImagesRef = useRef({ shield: null, ghost: null, magnet: null })
+  const [powerupImagesReady, setPowerupImagesReady] = useState(false)
+
+  useEffect(() => {
+    const urls = POWERUP_ICON_URLS
+    const keys = Object.keys(urls)
+    let loaded = 0
+    const images = { shield: null, ghost: null, magnet: null }
+    keys.forEach((key) => {
+      const img = new window.Image()
+      img.onload = () => {
+        images[key] = img
+        loaded++
+        if (loaded === keys.length) {
+          powerupImagesRef.current = images
+          setPowerupImagesReady(true)
+        }
+      }
+      img.src = urls[key]
+    })
+  }, [])
 
   useEffect(() => {
     const wrap = wrapRef.current
@@ -435,9 +464,9 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
       ctx.translate(offset.x, offset.y)
 
       const collectRadius = HEAD_RADIUS + PELLET_RADIUS + MAGNET_RADIUS
-      const magnetPull = 0.42
-      const magnetShrink = 0.5
-      const magnetFade = 0.35
+      const magnetPull = 0.32
+      const magnetShrink = 0.38
+      const magnetFade = 0.28
       for (const pellet of pellets) {
         let nearestHead = focus
         let distSq = toroidalDistSq(focus, pellet, bounds)
@@ -453,12 +482,14 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
         const dist = Math.sqrt(distSq)
         const t = Math.max(0, 1 - dist / collectRadius)
         const absorption = t * t * (3 - 2 * t)
+        const pullT = Math.pow(t, 0.85)
+        const pullCurve = pullT * pullT * (2 - pullT)
         let pullX = 0
         let pullY = 0
-        if (absorption > 0) {
+        if (pullCurve > 0) {
           pullX = (nearestHead.x - pellet.x) - w * Math.round((nearestHead.x - pellet.x) / w)
           pullY = (nearestHead.y - pellet.y) - h * Math.round((nearestHead.y - pellet.y) / h)
-          const pull = absorption * magnetPull
+          const pull = pullCurve * magnetPull
           pullX *= pull
           pullY *= pull
         }
@@ -474,47 +505,108 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
         const powerUpStyle = isPowerUp ? POWERUP_STYLE[ptype] : null
         const sizeScale = isPowerUp ? 1.25 : 1
         const usePull = offset.x === 0 && offset.y === 0
+        const powerupImgs = powerupImagesRef.current
+        const powerupImg = isPowerUp ? powerupImgs[ptype] : null
+        const usePowerupIcon = isPowerUp && powerupImg && powerupImagesReady
         for (const [px, py] of positions) {
           const drawX = usePull ? px + pullX : px
           const drawY = usePull ? py + pullY : py
           const r = PELLET_RADIUS * sizeScale * pelletPulse * sizeMult
-          const highlightOffset = r * ORB_HIGHLIGHT_OFFSET
-          const cx = drawX - highlightOffset
-          const cy = drawY - highlightOffset
           ctx.save()
           ctx.globalAlpha = alpha
-          if (powerUpStyle) {
-            ctx.shadowColor = powerUpStyle.shadowColor
-            ctx.shadowBlur = (ORB_GLOW_BLUR * 1.3 * sizeMult) / scale
-            const orbGrad = ctx.createRadialGradient(cx, cy, 0, drawX, drawY, r)
-            for (const [pos, color] of powerUpStyle.gradient) {
-              orbGrad.addColorStop(pos, color)
+          if (usePowerupIcon) {
+            const iconSize = PELLET_RADIUS * 3.8 * sizeMult
+            const half = iconSize / 2
+            const x = drawX - half
+            const y = drawY - half
+            const baseR = half + 8 / scale
+            if (ptype === 'shield') {
+              ctx.fillStyle = powerUpStyle.iconColor + '40'
+              ctx.beginPath()
+              ctx.arc(drawX, drawY, baseR, 0, Math.PI * 2)
+              ctx.fill()
+              ctx.strokeStyle = powerUpStyle.iconColor
+              ctx.lineWidth = 4 / scale
+              ctx.stroke()
+              ctx.shadowColor = powerUpStyle.shadowColor
+              ctx.shadowBlur = (14 * sizeMult) / scale
+              ctx.beginPath()
+              ctx.arc(drawX, drawY, baseR - 2 / scale, 0, Math.PI * 2)
+              ctx.stroke()
+            } else if (ptype === 'ghost') {
+              ctx.shadowColor = powerUpStyle.shadowColor
+              ctx.shadowBlur = (22 * sizeMult) / scale
+              ctx.beginPath()
+              ctx.arc(drawX, drawY, baseR + 4 / scale, 0, Math.PI * 2)
+              ctx.fillStyle = powerUpStyle.iconColor + '25'
+              ctx.fill()
+              ctx.shadowBlur = (12 * sizeMult) / scale
+              ctx.beginPath()
+              ctx.arc(drawX, drawY, baseR, 0, Math.PI * 2)
+              ctx.fill()
+              ctx.strokeStyle = 'rgba(255,255,255,0.35)'
+              ctx.lineWidth = 1.5 / scale
+              ctx.setLineDash([6 / scale, 4 / scale])
+              ctx.stroke()
+              ctx.setLineDash([])
+            } else {
+              ctx.strokeStyle = powerUpStyle.iconColor + 'cc'
+              ctx.lineWidth = 3 / scale
+              ctx.beginPath()
+              ctx.arc(drawX, drawY, baseR + 3 / scale, 0, Math.PI * 2)
+              ctx.stroke()
+              ctx.strokeStyle = 'rgba(255,255,255,0.5)'
+              ctx.lineWidth = 2 / scale
+              ctx.beginPath()
+              ctx.arc(drawX, drawY, baseR - 2 / scale, 0, Math.PI * 2)
+              ctx.stroke()
+              ctx.shadowColor = powerUpStyle.shadowColor
+              ctx.shadowBlur = (10 * sizeMult) / scale
             }
-            ctx.fillStyle = orbGrad
+            ctx.shadowColor = 'transparent'
+            ctx.shadowBlur = 0
+            ctx.drawImage(powerupImg, x, y, iconSize, iconSize)
+            ctx.globalCompositeOperation = 'source-atop'
+            ctx.fillStyle = powerUpStyle.iconColor ?? powerUpStyle.shadowColor
+            ctx.fillRect(x, y, iconSize, iconSize)
+            ctx.globalCompositeOperation = 'source-over'
           } else {
-            ctx.shadowColor = 'rgba(255, 100, 0, 0.9)'
-            ctx.shadowBlur = (ORB_GLOW_BLUR * valueMult * sizeMult) / scale
-            const orbGrad = ctx.createRadialGradient(cx, cy, 0, drawX, drawY, r)
-            orbGrad.addColorStop(0, 'rgba(255, 255, 255, 1)')
-            orbGrad.addColorStop(0.2, 'rgba(255, 255, 120, 1)')
-            orbGrad.addColorStop(0.45, 'rgba(255, 220, 60, 1)')
-            orbGrad.addColorStop(0.7, 'rgba(255, 160, 40, 1)')
-            orbGrad.addColorStop(0.9, 'rgba(255, 100, 80, 1)')
-            orbGrad.addColorStop(1, 'rgba(220, 60, 100, 1)')
-            ctx.fillStyle = orbGrad
+            const highlightOffset = r * ORB_HIGHLIGHT_OFFSET
+            const cx = drawX - highlightOffset
+            const cy = drawY - highlightOffset
+            if (powerUpStyle) {
+              ctx.shadowColor = powerUpStyle.shadowColor
+              ctx.shadowBlur = (ORB_GLOW_BLUR * 1.3 * sizeMult) / scale
+              const orbGrad = ctx.createRadialGradient(cx, cy, 0, drawX, drawY, r)
+              for (const [pos, color] of powerUpStyle.gradient) {
+                orbGrad.addColorStop(pos, color)
+              }
+              ctx.fillStyle = orbGrad
+            } else {
+              ctx.shadowColor = 'rgba(255, 100, 0, 0.9)'
+              ctx.shadowBlur = (ORB_GLOW_BLUR * valueMult * sizeMult) / scale
+              const orbGrad = ctx.createRadialGradient(cx, cy, 0, drawX, drawY, r)
+              orbGrad.addColorStop(0, 'rgba(255, 255, 255, 1)')
+              orbGrad.addColorStop(0.2, 'rgba(255, 255, 120, 1)')
+              orbGrad.addColorStop(0.45, 'rgba(255, 220, 60, 1)')
+              orbGrad.addColorStop(0.7, 'rgba(255, 160, 40, 1)')
+              orbGrad.addColorStop(0.9, 'rgba(255, 100, 80, 1)')
+              orbGrad.addColorStop(1, 'rgba(220, 60, 100, 1)')
+              ctx.fillStyle = orbGrad
+            }
+            ctx.beginPath()
+            ctx.arc(drawX, drawY, r, 0, Math.PI * 2)
+            ctx.fill()
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'
+            ctx.beginPath()
+            ctx.arc(cx - r * ORB_SPECULAR_OFFSET, cy - r * ORB_SPECULAR_OFFSET, r * ORB_SPECULAR_RADIUS, 0, Math.PI * 2)
+            ctx.fill()
+            ctx.strokeStyle = isPowerUp ? 'rgba(255, 255, 255, 0.7)' : 'rgba(255, 200, 120, 0.6)'
+            ctx.lineWidth = 1 / scale
+            ctx.beginPath()
+            ctx.arc(drawX, drawY, r, 0, Math.PI * 2)
+            ctx.stroke()
           }
-          ctx.beginPath()
-          ctx.arc(drawX, drawY, r, 0, Math.PI * 2)
-          ctx.fill()
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'
-          ctx.beginPath()
-          ctx.arc(cx - r * ORB_SPECULAR_OFFSET, cy - r * ORB_SPECULAR_OFFSET, r * ORB_SPECULAR_RADIUS, 0, Math.PI * 2)
-          ctx.fill()
-          ctx.strokeStyle = isPowerUp ? 'rgba(255, 255, 255, 0.7)' : 'rgba(255, 200, 120, 0.6)'
-          ctx.lineWidth = 1 / scale
-          ctx.beginPath()
-          ctx.arc(drawX, drawY, r, 0, Math.PI * 2)
-          ctx.stroke()
           ctx.restore()
         }
       }
@@ -665,7 +757,7 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
       mCtx.lineWidth = 1
       mCtx.strokeRect(vx, vy, vw * mScale, vh * mScale)
     }
-  }, [state, state?.bounds, resizeTick, playerDeadSnake, deathAnimationProgress, botDeadSnakes, deathAnimMs, speedBoostActive, speedBoostProgress])
+  }, [state, state?.bounds, resizeTick, playerDeadSnake, deathAnimationProgress, botDeadSnakes, deathAnimMs, speedBoostActive, speedBoostProgress, powerupImagesReady])
 
   useEffect(() => {
     const canvas = canvasRef.current

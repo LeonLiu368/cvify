@@ -10,7 +10,7 @@ export const BODY_RADIUS = 15
 export const DEATH_RADIUS_EXTRA = 12
 export const PELLET_RADIUS = 30
 /** Extra radius for pellet collection (magnet effect). */
-export const MAGNET_RADIUS = 100
+export const MAGNET_RADIUS = 155
 export const DEFAULT_SPEED = 1000
 /** Speed multiplier per segment over initial length (e.g. 0.006 = 0.6% per pellet). */
 export const SPEED_GROWTH_PER_SEGMENT = 0.006
