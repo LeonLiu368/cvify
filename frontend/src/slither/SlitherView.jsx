@@ -425,9 +425,10 @@ export function SlitherView({ state, onMouseMove, playerDeadSnake, deathAnimatio
     const cameraWorld = unwrapFocus(focus, cameraWorldRef.current, w, h)
     cameraWorldRef.current = cameraWorld
 
+    const VIEW_WORLD_SIZE = 5000
     let scale = Math.min(
-      canvas.width / (bounds.width * 0.5),
-      canvas.height / (bounds.height * 0.5),
+      canvas.width / VIEW_WORLD_SIZE,
+      canvas.height / VIEW_WORLD_SIZE,
       1.8,
     )
     if (speedBoostActive && speedBoostProgress != null) {
