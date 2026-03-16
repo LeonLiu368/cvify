@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=Space+Grotesk:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
 
 :root {
   color-scheme: dark;
@@ -67,9 +67,7 @@ body {
   justify-content: space-between;
   gap: var(--space-md);
   padding: var(--space-md) 0;
-  margin: 0 calc(-5vw) var(--space-md);
-  padding-left: 5vw;
-  padding-right: 5vw;
+  margin-bottom: var(--space-md);
   background: var(--bg);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -86,7 +84,7 @@ body {
 }
 
 .landing-brand {
-  font-family: 'Space Grotesk', 'DM Sans', sans-serif;
+  font-family: 'Inter', 'DM Sans', system-ui, sans-serif;
   font-weight: 700;
   font-size: clamp(1.5rem, 4vw, 2.25rem);
   letter-spacing: -0.03em;
@@ -100,6 +98,7 @@ body {
 }
 
 .landing-nav-link {
+  font-family: 'Inter', 'DM Sans', system-ui, sans-serif;
   font-size: 0.95rem;
   color: var(--muted);
   text-decoration: none;
@@ -120,6 +119,7 @@ body {
 }
 
 .landing-tagline {
+  font-family: 'Inter', 'DM Sans', system-ui, sans-serif;
   font-size: 1.1rem;
   color: var(--muted);
   margin: 0 0 var(--space-lg);
@@ -131,7 +131,7 @@ body {
 }
 
 .landing-section-title {
-  font-family: 'Space Grotesk', 'DM Sans', sans-serif;
+  font-family: 'Inter', 'DM Sans', system-ui, sans-serif;
   font-weight: 600;
   font-size: 1.35rem;
   margin: 0 0 var(--space-md);
@@ -163,6 +163,7 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  align-items: center;
 }
 
 .game-card:hover {
@@ -180,7 +181,7 @@ body {
 }
 
 .game-card-thumb-label {
-  font-family: 'Space Grotesk', 'DM Sans', sans-serif;
+  font-family: 'Inter', 'DM Sans', system-ui, sans-serif;
   font-weight: 700;
   font-size: clamp(2rem, 8vw, 3rem);
   color: rgba(255, 255, 255, 0.35);
@@ -188,15 +189,17 @@ body {
 }
 
 .game-card-title,
-.game-card-desc,
-.game-card-cta {
+.game-card-desc {
+  width: 100%;
+  box-sizing: border-box;
   padding-left: var(--space-lg);
   padding-right: var(--space-lg);
+  text-align: center;
 }
 
 .game-card-title {
   padding-top: var(--space-md);
-  font-family: 'Space Grotesk', 'DM Sans', sans-serif;
+  font-family: 'Inter', 'DM Sans', system-ui, sans-serif;
   font-weight: 600;
   font-size: 1.25rem;
   margin: 0 0 var(--space-sm);
@@ -213,12 +216,12 @@ body {
 
 .game-card-cta {
   display: inline-block;
-  align-self: flex-start;
+  align-self: center;
   margin-bottom: var(--space-lg);
   text-decoration: none;
   padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius-sm);
-  font-family: 'Space Grotesk', 'DM Sans', sans-serif;
+  font-family: 'Inter', 'DM Sans', system-ui, sans-serif;
   font-weight: 600;
   font-size: 0.95rem;
   cursor: pointer;
@@ -236,6 +239,7 @@ body {
 }
 
 .landing-footer {
+  font-family: 'Inter', 'DM Sans', system-ui, sans-serif;
   margin-top: auto;
   padding-top: var(--space-lg);
   font-size: 0.85rem;
