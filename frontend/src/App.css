@@ -9,17 +9,18 @@
   --food-color: #e74c3c;
   --cell-radius: 0;
   --cell-gap: 0;
-  /* Page and UI */
-  --bg: #1e1e1e;
-  --bg-alt: #2d2d2d;
-  --panel: #252525;
-  --card: #2a2a2a;
-  --text: #e8e8e8;
-  --muted: #9ca3af;
-  --accent: #33cc33;
+  /* Page and UI (Steam-inspired) */
+  --bg: #171a21;
+  --bg-alt: #1b2838;
+  --panel: #1b2838;
+  --card: #2a475e;
+  --text: #c7d5e0;
+  --muted: #8f98a0;
+  --accent: #66c0f4;
+  --accent-hover: #7dc9f5;
   --accent-2: #e74c3c;
   --accent-3: #22c55e;
-  --glow: rgba(51, 204, 51, 0.2);
+  --glow: rgba(102, 192, 244, 0.2);
   --shadow: rgba(0, 0, 0, 0.4);
   --space-xs: 6px;
   --space-sm: 12px;
@@ -52,7 +53,7 @@ body {
 .landing {
   min-height: 100vh;
   padding: 0 5vw 32px;
-  max-width: 1100px;
+  max-width: 1200px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -69,7 +70,7 @@ body {
   padding: var(--space-md) 0;
   margin-bottom: var(--space-md);
   background: var(--bg);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid #2a475e;
 }
 
 .landing-brand-link {
@@ -100,12 +101,12 @@ body {
 .landing-nav-link {
   font-family: 'Inter', 'DM Sans', system-ui, sans-serif;
   font-size: 0.95rem;
-  color: var(--muted);
+  color: var(--accent);
   text-decoration: none;
 }
 
 .landing-nav-link:hover {
-  color: var(--text);
+  color: var(--accent-hover);
 }
 
 .landing-nav-link:focus-visible {
@@ -155,11 +156,11 @@ body {
 
 .game-card {
   background: var(--card);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(102, 192, 244, 0.15);
   border-radius: 12px;
   padding: 0;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -169,6 +170,7 @@ body {
 .game-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  border-color: rgba(102, 192, 244, 0.35);
 }
 
 .game-card-thumb {
@@ -242,6 +244,7 @@ body {
   font-family: 'Inter', 'DM Sans', system-ui, sans-serif;
   margin-top: auto;
   padding-top: var(--space-lg);
+  border-top: 1px solid #2a475e;
   font-size: 0.85rem;
   color: var(--muted);
   text-align: center;
@@ -254,12 +257,12 @@ body {
 
 .game-nav-back {
   font-size: 0.9rem;
-  color: var(--muted);
+  color: var(--accent);
   text-decoration: none;
 }
 
 .game-nav-back:hover {
-  color: var(--text);
+  color: var(--accent-hover);
 }
 
 /* Slither page – canvas-centric layout, HUD overlays */
@@ -830,7 +833,7 @@ button {
   border: none;
   position: relative;
   overflow: hidden;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .ghost {
@@ -844,7 +847,11 @@ button {
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.primary:hover,
+.primary:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+
 .ghost:hover {
   transform: translateY(-1px);
 }
