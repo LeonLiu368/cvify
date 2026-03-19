@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useHeadTracking } from '../useHeadTracking'
+import { useHeadTracking, TRACKING_ERROR } from '../useHeadTracking'
 import { ResizableCameraPanel } from '../components/ResizableCameraPanel.jsx'
 import { getNextSnakeState, randomFood } from '../gameLogic'
 
@@ -64,6 +64,7 @@ export function SnakeCVPage() {
     noseOffset,
     fps,
     trackingStatus,
+    trackingError,
     isCalibrating,
     calibrationProgress,
     calibrationMessage,
@@ -358,10 +359,15 @@ export function SnakeCVPage() {
           <canvas ref={canvasRef} />
           {trackingStatus === 'error' ? (
             <div className="camera-error-overlay">
-              <p className="camera-error-text">Camera access failed</p>
-              <button type="button" className="primary" onClick={headRetry}>
-                Retry
-              </button>
+              <p className="camera-error-text">{cameraStatus}</p>
+              {trackingError === TRACKING_ERROR.CAMERA_DENIED ? (
+                <p className="camera-error-hint">Allow camera access in browser settings to use face tracking.</p>
+              ) : null}
+              {trackingError !== TRACKING_ERROR.CAMERA_DENIED ? (
+                <button type="button" className="primary" onClick={headRetry}>
+                  Retry
+                </button>
+              ) : null}
             </div>
           ) : null}
           {isCalibrating ? (

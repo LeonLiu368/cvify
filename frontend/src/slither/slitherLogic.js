@@ -142,7 +142,7 @@ export function createInitialState(options = {}) {
  * @param {Bounds} bounds
  * @returns {Point}
  */
-function wrapPoint(p, bounds) {
+export function wrapPoint(p, bounds) {
   const w = bounds.width
   const h = bounds.height
   return {

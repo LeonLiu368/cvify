@@ -969,6 +969,14 @@ button {
   font-size: 1rem;
 }
 
+.camera-error-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-align: center;
+  max-width: 240px;
+}
+
 .camera-calibration-overlay {
   position: absolute;
   inset: 0;

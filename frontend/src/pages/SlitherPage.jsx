@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { createInitialState, tick, getSnakeLength, GHOST_DURATION, MAGNET_DURATION } from '../slither/slitherLogic.js'
 import { computeTargetAngles } from '../slither/botAI.js'
 import { SlitherView } from '../slither/SlitherView.jsx'
-import { useHeadTracking } from '../useHeadTracking.js'
+import { useHeadTracking, TRACKING_ERROR } from '../useHeadTracking.js'
 import { ResizableCameraPanel } from '../components/ResizableCameraPanel.jsx'
 import shieldPowerupIcon from '../assets/powerups/shield.svg'
 import ghostPowerupIcon from '../assets/powerups/ghost.svg'
@@ -62,6 +62,7 @@ export function SlitherPage() {
     noseOffset,
     fps,
     trackingStatus,
+    trackingError,
     isCalibrating,
     calibrationProgress,
     calibrationMessage,
@@ -545,10 +546,15 @@ export function SlitherPage() {
           <canvas ref={canvasRef} />
           {trackingStatus === 'error' ? (
             <div className="camera-error-overlay">
-              <p className="camera-error-text">Camera access failed</p>
-              <button type="button" className="primary" onClick={headRetry}>
-                Retry
-              </button>
+              <p className="camera-error-text">{cameraStatus}</p>
+              {trackingError === TRACKING_ERROR.CAMERA_DENIED ? (
+                <p className="camera-error-hint">Allow camera access in browser settings to use face tracking.</p>
+              ) : null}
+              {trackingError !== TRACKING_ERROR.CAMERA_DENIED ? (
+                <button type="button" className="primary" onClick={headRetry}>
+                  Retry
+                </button>
+              ) : null}
             </div>
           ) : null}
           {isCalibrating ? (

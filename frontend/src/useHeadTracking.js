@@ -33,9 +33,16 @@ const BASELINE_BLEND_INTERVAL_MS = 5000
 const BASELINE_BLEND_ALPHA = 0.1
 const BASELINE_DRIFT_ENABLED = false
 
+/** Error codes for head tracking failures (UI can show specific copy and retry behavior). */
+export const TRACKING_ERROR = {
+  CAMERA_DENIED: 'cameraDenied',
+  MEDIAPIPE_LOAD: 'mediapipeLoadFailed',
+  NOT_SUPPORTED: 'notSupported',
+}
+
 /**
  * @param {{ faceEnabled: boolean, onDirectionChange?: (vec: { x: number, y: number }) => void, onAngleChange?: (angleRadians: number) => void, onMouthOpen?: () => void, sensitivity?: number }} options
- * @returns {{ videoRef: React.RefObject, canvasRef: React.RefObject, cameraStatus: string, headDirection: string | null, noseOffset: { x: number, y: number }, fps: number, trackingStatus: 'idle'|'loading'|'ready'|'error', isCalibrating: boolean, calibrationProgress: number, calibrationMessage: string, recalibrate: () => void, retry: () => void }}
+ * @returns {{ videoRef: React.RefObject, canvasRef: React.RefObject, cameraStatus: string, headDirection: string | null, noseOffset: { x: number, y: number }, fps: number, trackingStatus: 'idle'|'loading'|'ready'|'error', trackingError: string | null, isCalibrating: boolean, calibrationProgress: number, calibrationMessage: string, recalibrate: () => void, retry: () => void }}
  */
 export function useHeadTracking({
   faceEnabled,
@@ -45,6 +52,7 @@ export function useHeadTracking({
   sensitivity = 1,
 }) {
   const [trackingStatus, setTrackingStatus] = useState('loading')
+  const [trackingError, setTrackingError] = useState(/** @type {string | null} */ (null))
   const [cameraStatus, setCameraStatus] = useState('Initializing camera…')
   const [headDirection, setHeadDirection] = useState(null)
   const [noseOffset, setNoseOffset] = useState({ x: 0, y: 0 })
@@ -109,6 +117,7 @@ export function useHeadTracking({
 
   const retry = useCallback(() => {
     setTrackingStatus('loading')
+    setTrackingError(null)
     setCameraStatus('Initializing camera…')
     setRetryKey((k) => k + 1)
   }, [])
@@ -135,18 +144,51 @@ export function useHeadTracking({
 
     const setup = async () => {
       setTrackingStatus('loading')
+      setTrackingError(null)
       try {
-        const vision = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM_URL)
-        landmarker = await FaceLandmarker.createFromOptions(vision, {
-          baseOptions: { modelAssetPath: FACE_LANDMARKER_MODEL },
-          runningMode: 'VIDEO',
-          numFaces: 1,
-        })
+        let vision
+        try {
+          vision = await FilesetResolver.forVisionTasks(MEDIAPIPE_WASM_URL)
+          landmarker = await FaceLandmarker.createFromOptions(vision, {
+            baseOptions: { modelAssetPath: FACE_LANDMARKER_MODEL },
+            runningMode: 'VIDEO',
+            numFaces: 1,
+          })
+        } catch (loadErr) {
+          if (import.meta.env.DEV) console.error(loadErr)
+          setTrackingError(TRACKING_ERROR.MEDIAPIPE_LOAD)
+          setTrackingStatus('error')
+          setCameraStatus('Failed to load face model')
+          return
+        }
 
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: 640, height: 480 },
-        })
-        if (!videoRef.current || !active) return
+        let stream
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: 640, height: 480 },
+          })
+        } catch (mediaErr) {
+          if (import.meta.env.DEV) console.error(mediaErr)
+          const name = mediaErr?.name ?? ''
+          const isPermission = name === 'PermissionDeniedError' || name === 'NotAllowedError'
+          const isNotFound = name === 'NotFoundError'
+          if (isPermission) {
+            setTrackingError(TRACKING_ERROR.CAMERA_DENIED)
+            setCameraStatus('Camera access denied')
+          } else if (isNotFound) {
+            setTrackingError(TRACKING_ERROR.NOT_SUPPORTED)
+            setCameraStatus('No camera found')
+          } else {
+            setTrackingError(TRACKING_ERROR.NOT_SUPPORTED)
+            setCameraStatus('Camera not available (try HTTPS)')
+          }
+          setTrackingStatus('error')
+          return
+        }
+        if (!videoRef.current || !active) {
+          stream.getTracks().forEach((t) => t.stop())
+          return
+        }
         streamToClean = stream
         videoRef.current.srcObject = stream
         await videoRef.current.play()
@@ -323,7 +365,9 @@ export function useHeadTracking({
 
         animationId = requestAnimationFrame(loop)
       } catch (error) {
-        console.error(error)
+        if (import.meta.env.DEV) console.error(error)
+        if (!active) return
+        setTrackingError(TRACKING_ERROR.NOT_SUPPORTED)
         setTrackingStatus('error')
         setCameraStatus('Camera access failed')
       }
@@ -374,6 +418,7 @@ export function useHeadTracking({
     noseOffset,
     fps,
     trackingStatus,
+    trackingError,
     isCalibrating,
     calibrationProgress,
     calibrationMessage,
